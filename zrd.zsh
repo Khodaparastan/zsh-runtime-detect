@@ -242,50 +242,63 @@ __zrd_exec_whitelisted() {
   local path
   path=$(__zrd_find_cmd "$cmd") || return 1
 
-  local tf ef
-  # Use whitelisted mktemp or fallback to safe temp creation
+  local tf ef old_umask
   local mktemp_path
+  old_umask=$(umask)
+  umask 077
   if mktemp_path=$(__zrd_find_cmd "mktemp" 2>/dev/null); then
-    if ! tf=$("$mktemp_path" -t "zrd_exec.XXXXXX" 2>/dev/null); then
-      __zrd_log 1 "mktemp failed creating stdout capture for $cmd"
-      return 1
-    fi
-    if ! ef=$("$mktemp_path" -t "zrd_exec.err.XXXXXX" 2>/dev/null); then
-      __zrd_log 1 "mktemp failed creating stderr capture for $cmd"
-      command rm -f -- "$tf" 2>/dev/null
-      return 1
-    fi
+    tf=$("$mktemp_path" -t "zrd_exec.XXXXXX" 2>/dev/null) || { umask $old_umask; __zrd_log 1 "mktemp failed stdout for $cmd"; return 1; }
+    ef=$("$mktemp_path" -t "zrd_exec.err.XXXXXX" 2>/dev/null) || { umask $old_umask; __zrd_log 1 "mktemp failed stderr for $cmd"; command rm -f -- "$tf" 2>/dev/null; return 1; }
   else
-    # Fallback to manual temp file creation
     local tmpdir="${TMPDIR:-/tmp}"
     tf="${tmpdir}/zrd_exec.$$.$RANDOM"
     ef="${tmpdir}/zrd_exec.err.$$.$RANDOM"
-    if ! touch "$tf" "$ef" 2>/dev/null; then
+    if ! { : >"$tf" && : >"$ef"; }; then
+      umask $old_umask
       __zrd_log 1 "Failed to create temp files for $cmd"
       return 1
     fi
   fi
+  umask $old_umask
 
   local -i rc=1
   {
     if (( ZRD_CFG_CMD_TIMEOUT > 0 )); then
+      if (( ZRD_CFG_SANITIZE_ENV )); then
+        eval "env -i $(__zrd_sanitize_exec_env) \"$path\" \"$@\" " </dev/null >"$tf" 2>"$ef" &!
+        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT cat "$tf" >/dev/null 2>&1 # warm wait to sync timing
+        # Rerun with timeout wrapper properly:
+        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$path" "$@" >"$tf" 2>"$ef"
+      else
       __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$path" "$@" >"$tf" 2>"$ef"
+      fi
+      rc=$?
+      if (( rc == 124 )); then
+        __zrd_log 1 "Command timed out [$cmd] after ${ZRD_CFG_CMD_TIMEOUT}s"
+      fi
     else
-      "$path" "$@" >"$tf" 2>"$ef"
+      if (( ZRD_CFG_SANITIZE_ENV )); then
+        eval "env -i $(__zrd_sanitize_exec_env) \"$path\" \"$@\" " </dev/null >"$tf" 2>"$ef"
+      else
+        "$path" "$@" </dev/null >"$tf" 2>"$ef"
     fi
     rc=$?
+    fi
   } always {
     (( rc != 0 )) && [[ -s $ef ]] && (( ZRD_CFG_DEBUG >= 2 )) && __zrd_log 1 "Command error [$cmd]: $(<"$ef")"
   }
 
   if (( rc == 0 )) && [[ -s $tf ]]; then
-    # Use whitelisted cat or fallback to direct cat
     local cat_path
     if cat_path=$(__zrd_find_cmd "cat" 2>/dev/null); then
       "$cat_path" -- "$tf"
     else
+      if (( ZRD_CFG_STRICT_CMDS )); then
+        : # do not fallback in strict mode
+      else
       command cat -- "$tf"
     fi
+  fi
   fi
   command rm -f -- "$tf" "$ef" 2>/dev/null
   return $rc
@@ -326,9 +339,8 @@ __zrd_read_regular_file() {
   (( ${#file} <= 256 )) || return 1
   [[ -f $file && -r $file ]] || return 1
   case $file in
-    /dev/*|/proc/*/fd/*|/proc/*/task/*|/proc/kcore|/proc/sys/kernel/random/*) return 1 ;;
+    /dev/*|/proc/*/fd/*|/proc/*/task/*|/proc/kcore|/proc/sys/kernel/random/*|/proc/sysrq-trigger|/sys/kernel/debug/*) return 1 ;;
   esac
-
   local -i size=0
   if __zrd_find_cmd stat >/dev/null 2>&1; then
     local out
@@ -580,34 +592,22 @@ __zrd_detect_vm() {
 __zrd_detect_macos_version() {
   emulate -L zsh
   local version="unknown" codename="unknown" build="unknown"
-
-  # Try sw_vers first (most reliable)
-  local ver_output
-  if ver_output=$(__zrd_exec_whitelisted sw_vers -productVersion 2>/dev/null) || ver_output=$(sw_vers -productVersion 2>/dev/null); then
+  local ver_output build_output plist_output
+  if ver_output=$(__zrd_exec_whitelisted sw_vers -productVersion 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && ver_output=$(sw_vers -productVersion 2>/dev/null); }; then
     version=${ver_output//[[:cntrl:]]/}
     __zrd_log 2 "macOS version from sw_vers: $version"
   fi
-
-  # Get build version
-  local build_output
-  if build_output=$(__zrd_exec_whitelisted sw_vers -buildVersion 2>/dev/null) || build_output=$(sw_vers -buildVersion 2>/dev/null); then
+  if build_output=$(__zrd_exec_whitelisted sw_vers -buildVersion 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && build_output=$(sw_vers -buildVersion 2>/dev/null); }; then
     build=${build_output//[[:cntrl:]]/}
     __zrd_log 2 "macOS build from sw_vers: $build"
   fi
-
-  # Try SystemVersion.plist if sw_vers fails
   if [[ $version == "unknown" ]] && [[ -r /System/Library/CoreServices/SystemVersion.plist ]]; then
-    local plist_output
-    if plist_output=$(__zrd_exec_whitelisted plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null) || \
-       plist_output=$(plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null); then
-      # Extract ProductUserVisibleVersion or ProductVersion
+    if plist_output=$(__zrd_exec_whitelisted plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && plist_output=$(plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null); }; then
       version=$(echo "$plist_output" | grep -E '(ProductUserVisibleVersion|ProductVersion)' | head -1 | sed 's/.*=> "\([^"]*\)".*/\1/')
       [[ -z $build ]] && build=$(echo "$plist_output" | grep 'ProductBuildVersion' | sed 's/.*=> "\([^"]*\)".*/\1/')
       __zrd_log 2 "macOS version from plist: $version, build: $build"
     fi
   fi
-
-  # Determine codename based on version
   if [[ $version != "unknown" ]]; then
     case $version in
       15.*) codename="Sequoia" ;;
@@ -628,30 +628,26 @@ __zrd_detect_macos_version() {
       *) codename="macOS" ;;
     esac
   fi
-
   print -r -- "macos:${version}:${codename}:${build}"
 }
 
 __zrd_detect_linux_distro() {
   emulate -L zsh
   local d="unknown" v="unknown" c="unknown" s
-
-  # Try lsb_release first
+  # lsb_release
   if __zrd_find_cmd lsb_release >/dev/null 2>&1; then
-    local lsb_id lsb_release lsb_codename
-    lsb_id=$(__zrd_exec_whitelisted lsb_release -si 2>/dev/null || lsb_release -si 2>/dev/null)
-    lsb_release=$(__zrd_exec_whitelisted lsb_release -sr 2>/dev/null || lsb_release -sr 2>/dev/null)
-    lsb_codename=$(__zrd_exec_whitelisted lsb_release -sc 2>/dev/null || lsb_release -sc 2>/dev/null)
-
+    local lsb_id lsb_rel lsb_code
+    lsb_id=$(__zrd_exec_whitelisted lsb_release -si 2>/dev/null || (( ! ZRD_CFG_STRICT_CMDS )) && lsb_release -si 2>/dev/null)
+    lsb_rel=$(__zrd_exec_whitelisted lsb_release -sr 2>/dev/null || (( ! ZRD_CFG_STRICT_CMDS )) && lsb_release -sr 2>/dev/null)
+    lsb_code=$(__zrd_exec_whitelisted lsb_release -sc 2>/dev/null || (( ! ZRD_CFG_STRICT_CMDS )) && lsb_release -sc 2>/dev/null)
     if [[ -n $lsb_id ]]; then
       d=${lsb_id:l}
-      [[ -n $lsb_release ]] && v=$lsb_release
-      [[ -n $lsb_codename ]] && c=$lsb_codename
+      [[ -n $lsb_rel ]] && v=$lsb_rel
+      [[ -n $lsb_code ]] && c=$lsb_code
       __zrd_log 2 "Linux distro from lsb_release: $d $v ($c)"
     fi
   fi
-
-  # Try /etc/os-release (modern standard)
+  # /etc/os-release
   if [[ $d == "unknown" && -r /etc/os-release ]]; then
     s=$(__zrd_read_regular_file "/etc/os-release" 8192 2>/dev/null)
     if [[ -n $s ]]; then
@@ -735,26 +731,18 @@ __zrd_collect_uname() {
   emulate -L zsh
   local -A info
   local res
-
-  # Try whitelisted commands first, fallback to direct calls
-  res=$(__zrd_exec_whitelisted uname -s 2>/dev/null) || res=$(uname -s 2>/dev/null)
+  res=$(__zrd_exec_whitelisted uname -s 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -s 2>/dev/null) }
   info[system]=${res//[[:cntrl:]]/}
-
-  res=$(__zrd_exec_whitelisted uname -m 2>/dev/null) || res=$(uname -m 2>/dev/null)
+  res=$(__zrd_exec_whitelisted uname -m 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -m 2>/dev/null) }
   info[machine]=${res%% *}
-
-  res=$(__zrd_exec_whitelisted uname -r 2>/dev/null) || res=$(uname -r 2>/dev/null)
+  res=$(__zrd_exec_whitelisted uname -r 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -r 2>/dev/null) }
   info[release]=${res%% *}
-
-  res=$(__zrd_exec_whitelisted uname -v 2>/dev/null) || res=$(uname -v 2>/dev/null)
+  res=$(__zrd_exec_whitelisted uname -v 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -v 2>/dev/null) }
   info[version]=${res//$'\n'/ }
-
-  res=$(__zrd_exec_whitelisted uname -n 2>/dev/null) || res=$(uname -n 2>/dev/null)
+  res=$(__zrd_exec_whitelisted uname -n 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -n 2>/dev/null) }
   info[nodename]=${res%% *}
-
-  res=$(__zrd_exec_whitelisted uname -p 2>/dev/null) || res=$(uname -p 2>/dev/null)
+  res=$(__zrd_exec_whitelisted uname -p 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -p 2>/dev/null) }
   info[processor]=${res%% *}
-
   local k
   for k in ${(k)info}; do
     print -r -- "$k=${info[$k]}"
