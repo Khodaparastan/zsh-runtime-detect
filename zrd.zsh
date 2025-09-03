@@ -8,7 +8,7 @@
 # detailed system information with security-focused design and intelligent caching.
 #
 # Repository: https://github.com/khdaparastan/zsh-runtime-detect
-# Version:    2.3.0
+# Version:    2.3.1
 # API:        2
 # License:    MIT
 # Author:     khodaparastan <mohammad@khodapastan.com>
@@ -26,46 +26,25 @@
 #------------------------------------------------------------------------------
 # Module version and API info
 #------------------------------------------------------------------------------
-typeset -gr __ZRD_MODULE_VERSION="2.3.0"
-typeset -gr __ZRD_API_VERSION="2"
+typeset -g __ZRD_THIS_VERSION="2.3.1"
+typeset -g __ZRD_API_VERSION="2"
 
 #------------------------------------------------------------------------------
 # Early reload/version guard with robust cleanup
 #------------------------------------------------------------------------------
 if (( ${+__ZRD_MODULE_LOADED} )); then
-  if [[ ${__ZRD_MODULE_VERSION:-} != "2.3.0" ]]; then
+  if [[ ${__ZRD_MODULE_VERSION:-} == "$__ZRD_THIS_VERSION" ]]; then
+    [[ ${ZRD_CFG_DEBUG:-0} -ge 1 ]] && print -P "%F{yellow}[platform] Module already loaded%f" >&2
+    return 0
+  fi
     emulate -L zsh
     print -P "%F{yellow}[platform] Version mismatch, reloading...%f" >&2
     if typeset -f zrd_cleanup >/dev/null 2>&1; then
       zrd_cleanup
-    else
-      emulate -L zsh
-      unset __ZRD_MODULE_LOADED __ZRD_CACHE_DETECTED __ZRD_CACHE_TIME \
-            __ZRD_CACHE_SIGNATURE __ZRD_CACHE_VERSION 2>/dev/null
-      unset ZRD_CFG_AUTO_DETECT ZRD_CFG_DEBUG ZRD_CFG_CACHE_TTL \
-            ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT ZRD_CFG_STRICT_CMDS \
-            ZRD_CFG_JSON_BOOL ZRD_CFG_SANITIZE_ENV 2>/dev/null
-      unset ZRD_PLATFORM ZRD_ARCH ZRD_KERNEL ZRD_KERNEL_RELEASE ZRD_KERNEL_VERSION \
-            ZRD_HOSTNAME ZRD_USERNAME ZRD_DISTRO ZRD_DISTRO_VERSION ZRD_DISTRO_CODENAME \
-            ZRD_IS_MACOS ZRD_IS_LINUX ZRD_IS_BSD ZRD_IS_UNIX ZRD_IS_ARM ZRD_IS_X86_64 \
-            ZRD_IS_WSL ZRD_IS_CONTAINER ZRD_IS_VM ZRD_IS_TERMUX ZRD_IS_CHROOT \
-            ZRD_IS_INTERACTIVE ZRD_IS_SSH ZRD_IS_ROOT ZRD_IS_CI 2>/dev/null
-      unfunction zrd_detect zrd_available zrd_refresh zrd_summary zrd_info zrd_is \
-                 zrd_arch zrd_paths zrd_status zrd_cleanup 2>/dev/null
-      unfunction __zrd_log __zrd_now __zrd_json_escape __zrd_validate_config \
-                 __zrd_find_cmd __zrd_exec_whitelisted __zrd_with_timeout \
-                 __zrd_read_regular_file __zrd_parse_kv __zrd_cache_signature __zrd_cache_valid \
-                 __zrd_normalize_platform __zrd_normalize_arch __zrd_hostname \
-                 __zrd_detect_wsl __zrd_detect_container __zrd_detect_vm \
-                 __zrd_detect_linux_distro __zrd_detect_macos_version __zrd_collect_uname \
-                 __zrd_bool __zrd_sanitize_exec_env 2>/dev/null
-    fi
-  else
-    [[ ${ZRD_CFG_DEBUG:-0} -ge 1 ]] && print -P "%F{yellow}[platform] Module already loaded%f" >&2
-    return 0
   fi
 fi
 
+typeset -g __ZRD_MODULE_VERSION="$__ZRD_THIS_VERSION"
 typeset -gi __ZRD_MODULE_LOADED=1
 
 #------------------------------------------------------------------------------
