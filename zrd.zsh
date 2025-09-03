@@ -372,16 +372,15 @@ __zrd_parse_kv() {
 # Detection helpers
 #===============================================================================
 __zrd_cache_signature() {
-  emulate -L zsh
-  # Include uname -s/-m for extra stability across unusual shells
+  emulate -L zsh -o no_aliases
   local us um
-  us=$(uname -s 2>/dev/null)
-  um=$(uname -m 2>/dev/null)
+  us=$(__zrd_exec_whitelisted uname -s 2>/dev/null) || us=${OSTYPE:-}
+  um=$(__zrd_exec_whitelisted uname -m 2>/dev/null) || um=${HOSTTYPE:-}
   print -r -- "${OSTYPE:-}:${MACHTYPE:-}:${HOSTTYPE:-}:${EUID:-}:${UID:-}:${__ZRD_MODULE_VERSION:-}:${us}:${um}"
 }
 
 __zrd_cache_valid() {
-  emulate -L zsh -o extended_glob
+  emulate -L zsh -o no_aliases -o extended_glob
   (( __ZRD_CACHE_DETECTED )) || return 1
   local now=$(__zrd_now)
   if [[ $__ZRD_CACHE_TIME == <-> ]]; then
