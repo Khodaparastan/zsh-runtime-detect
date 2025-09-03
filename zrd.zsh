@@ -273,9 +273,7 @@ __zrd_exec_whitelisted() {
     if cat_path=$(__zrd_find_cmd "cat" 2>/dev/null); then
       "$cat_path" -- "$tf"
     else
-      if (( ZRD_CFG_STRICT_CMDS )); then
-        : # do not fallback in strict mode
-      else
+      if (( ! ZRD_CFG_STRICT_CMDS )); then
       command cat -- "$tf"
     fi
   fi
