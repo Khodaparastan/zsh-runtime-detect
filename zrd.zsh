@@ -67,40 +67,52 @@ fi
 
 typeset -gi __ZRD_MODULE_LOADED=1
 
-# User-configurable knobs (validated later)
+#------------------------------------------------------------------------------
+# Configuration (user-settable before sourcing)
+#------------------------------------------------------------------------------
 typeset -gi ZRD_CFG_AUTO_DETECT=${ZRD_CFG_AUTO_DETECT:-0}
 typeset -gi ZRD_CFG_DEBUG=${ZRD_CFG_DEBUG:-0}                 # 0..3
 typeset -gi ZRD_CFG_CACHE_TTL=${ZRD_CFG_CACHE_TTL:-300}       # seconds
 typeset -gi ZRD_CFG_MAX_FILE_SIZE=${ZRD_CFG_MAX_FILE_SIZE:-8192}
 typeset -gi ZRD_CFG_CMD_TIMEOUT=${ZRD_CFG_CMD_TIMEOUT:-10}    # seconds
+# New options:
+typeset -gi ZRD_CFG_STRICT_CMDS=${ZRD_CFG_STRICT_CMDS:-0}     # 1 = disallow non-whitelisted fallbacks
+typeset -gi ZRD_CFG_JSON_BOOL=${ZRD_CFG_JSON_BOOL:-0}         # 1 = true/false flags in JSON, 0 = 0/1
+typeset -gi ZRD_CFG_SANITIZE_ENV=${ZRD_CFG_SANITIZE_ENV:-1}   # 1 = sanitize env when exec whitelisted
 
+#------------------------------------------------------------------------------
 # Internal caches/state
+#------------------------------------------------------------------------------
 typeset -gA __ZRD_CMD_PATH_CACHE=()
 typeset -g __ZRD_CACHE_TIME=0
 typeset -g __ZRD_CACHE_SIGNATURE=""
 typeset -g __ZRD_CACHE_VERSION=""
 typeset -gi __ZRD_CACHE_DETECTED=0
 
+#------------------------------------------------------------------------------
 # Whitelisted command paths (security)
+# Expand coverage: macOS Homebrew, coreutils gnubin, Nix common location,
+# and typical Linux/bin paths. Avoid globs that won't expand; keep static.
+#------------------------------------------------------------------------------
 typeset -grA __ZRD_WHITELIST_CMDS=(
-  uname "/bin/uname:/usr/bin/uname:/opt/homebrew/opt/coreutils/libexec/gnubin/uname"
-  hostname "/bin/hostname:/usr/bin/hostname:/opt/homebrew/bin/hostname:/usr/local/bin/hostname"
-  date "/bin/date:/usr/bin/date:/opt/homebrew/bin/date:/usr/local/bin/date"
-  stat "/bin/stat:/usr/bin/stat:/opt/homebrew/bin/stat:/usr/local/bin/stat:/opt/homebrew/opt/coreutils/libexec/gnubin/stat"
-  head "/bin/head:/usr/bin/head:/opt/homebrew/bin/head:/usr/local/bin/head:/opt/homebrew/opt/coreutils/libexec/gnubin/head"
-  wc "/bin/wc:/usr/bin/wc:/opt/homebrew/bin/wc:/usr/local/bin/wc:/opt/homebrew/opt/coreutils/libexec/gnubin/wc"
-  systemd-detect-virt "/bin/systemd-detect-virt:/usr/bin/systemd-detect-virt"
+  uname "/bin/uname:/usr/bin/uname:/opt/homebrew/opt/coreutils/libexec/gnubin/uname:/run/current-system/sw/bin/uname"
+  hostname "/bin/hostname:/usr/bin/hostname:/opt/homebrew/bin/hostname:/usr/local/bin/hostname:/run/current-system/sw/bin/hostname"
+  date "/bin/date:/usr/bin/date:/opt/homebrew/bin/date:/usr/local/bin/date:/run/current-system/sw/bin/date"
+  stat "/bin/stat:/usr/bin/stat:/opt/homebrew/bin/stat:/usr/local/bin/stat:/opt/homebrew/opt/coreutils/libexec/gnubin/stat:/run/current-system/sw/bin/stat"
+  head "/bin/head:/usr/bin/head:/opt/homebrew/bin/head:/usr/local/bin/head:/opt/homebrew/opt/coreutils/libexec/gnubin/head:/run/current-system/sw/bin/head"
+  wc "/bin/wc:/usr/bin/wc:/opt/homebrew/bin/wc:/usr/local/bin/wc:/opt/homebrew/opt/coreutils/libexec/gnubin/wc:/run/current-system/sw/bin/wc"
+  systemd-detect-virt "/bin/systemd-detect-virt:/usr/bin/systemd-detect-virt:/run/current-system/sw/bin/systemd-detect-virt"
   system_profiler "/usr/sbin/system_profiler"
-  id "/bin/id:/usr/bin/id:/opt/homebrew/bin/id:/usr/local/bin/id:/opt/homebrew/opt/coreutils/libexec/gnubin/id"
-  whoami "/bin/whoami:/usr/bin/whoami:/opt/homebrew/bin/whoami:/usr/local/bin/whoami:/opt/homebrew/opt/coreutils/libexec/gnubin/whoami"
-  mktemp "/bin/mktemp:/usr/bin/mktemp:/opt/homebrew/bin/mktemp:/usr/local/bin/mktemp:/opt/homebrew/opt/coreutils/libexec/gnubin/mktemp"
-  dd "/bin/dd:/usr/bin/dd:/opt/homebrew/bin/dd:/usr/local/bin/dd:/opt/homebrew/opt/coreutils/libexec/gnubin/dd"
-  timeout "/bin/timeout:/usr/bin/timeout:/opt/homebrew/bin/timeout:/usr/local/bin/timeout"
-  cat "/bin/cat:/usr/bin/cat:/opt/homebrew/bin/cat:/usr/local/bin/cat:/opt/homebrew/opt/coreutils/libexec/gnubin/cat"
+  id "/bin/id:/usr/bin/id:/opt/homebrew/bin/id:/usr/local/bin/id:/opt/homebrew/opt/coreutils/libexec/gnubin/id:/run/current-system/sw/bin/id"
+  whoami "/bin/whoami:/usr/bin/whoami:/opt/homebrew/bin/whoami:/usr/local/bin/whoami:/opt/homebrew/opt/coreutils/libexec/gnubin/whoami:/run/current-system/sw/bin/whoami"
+  mktemp "/bin/mktemp:/usr/bin/mktemp:/opt/homebrew/bin/mktemp:/usr/local/bin/mktemp:/opt/homebrew/opt/coreutils/libexec/gnubin/mktemp:/run/current-system/sw/bin/mktemp"
+  dd "/bin/dd:/usr/bin/dd:/opt/homebrew/bin/dd:/usr/local/bin/dd:/opt/homebrew/opt/coreutils/libexec/gnubin/dd:/run/current-system/sw/bin/dd"
+  timeout "/bin/timeout:/usr/bin/timeout:/opt/homebrew/bin/timeout:/usr/local/bin/timeout:/run/current-system/sw/bin/timeout"
+  cat "/bin/cat:/usr/bin/cat:/opt/homebrew/bin/cat:/usr/local/bin/cat:/opt/homebrew/opt/coreutils/libexec/gnubin/cat:/run/current-system/sw/bin/cat"
   sw_vers "/usr/bin/sw_vers"
   plutil "/usr/bin/plutil"
-  lsb_release "/usr/bin/lsb_release:/bin/lsb_release"
-  grep "/bin/grep:/usr/bin/grep:/opt/homebrew/bin/grep:/usr/local/bin/grep"
+  lsb_release "/usr/bin/lsb_release:/bin/lsb_release:/run/current-system/sw/bin/lsb_release"
+  grep "/bin/grep:/usr/bin/grep:/opt/homebrew/bin/grep:/usr/local/bin/grep:/run/current-system/sw/bin/grep"
 )
 
 #===============================================================================
@@ -150,10 +162,13 @@ __zrd_validate_config() {
   local -i changed=0
   local -a checks=(
     "ZRD_CFG_AUTO_DETECT:0:1:0"
-    "ZRD_CFG_CACHE_TTL:60:3600:300"
-    "ZRD_CFG_MAX_FILE_SIZE:1024:65536:8192"
-    "ZRD_CFG_CMD_TIMEOUT:0:60:10"
+    "ZRD_CFG_CACHE_TTL:30:86400:300"
+    "ZRD_CFG_MAX_FILE_SIZE:1024:131072:8192"
+    "ZRD_CFG_CMD_TIMEOUT:0:120:10"
     "ZRD_CFG_DEBUG:0:3:0"
+    "ZRD_CFG_STRICT_CMDS:0:1:0"
+    "ZRD_CFG_JSON_BOOL:0:1:0"
+    "ZRD_CFG_SANITIZE_ENV:0:1:1"
   )
   local tuple var min max def cur
   for tuple in "${checks[@]}"; do
@@ -1174,7 +1189,8 @@ zrd_status() {
 zrd_cleanup() {
   emulate -L zsh
   unset __ZRD_CACHE_DETECTED __ZRD_CACHE_TIME __ZRD_CACHE_SIGNATURE __ZRD_CACHE_VERSION 2>/dev/null
-  unset ZRD_CFG_AUTO_DETECT ZRD_CFG_DEBUG ZRD_CFG_CACHE_TTL ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT 2>/dev/null
+  unset ZRD_CFG_AUTO_DETECT ZRD_CFG_DEBUG ZRD_CFG_CACHE_TTL ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT \
+        ZRD_CFG_STRICT_CMDS ZRD_CFG_JSON_BOOL ZRD_CFG_SANITIZE_ENV 2>/dev/null
   unset __ZRD_CMD_PATH_CACHE 2>/dev/null
   unset __ZRD_MODULE_LOADED 2>/dev/null
 
