@@ -291,7 +291,7 @@ __zrd_with_timeout() {
     "$timeout_cmd" "$seconds" "$@"
     return $?
   fi
-  # Fallback shim
+  # Fallback shim (best effort)
   "$@" </dev/null & local -i pid=$!
   local -F tick=0.25 elapsed=0.0
   while kill -0 $pid 2>/dev/null; do
