@@ -565,9 +565,10 @@ __zrd_detect_vm() {
 }
 
 __zrd_detect_macos_version() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local version="unknown" codename="unknown" build="unknown"
-  local ver_output build_output plist_output
+  local ver_output build_output plist="/System/Library/CoreServices/SystemVersion.plist"
+
   if ver_output=$(__zrd_exec_whitelisted sw_vers -productVersion 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && ver_output=$(sw_vers -productVersion 2>/dev/null); }; then
     version=${ver_output//[[:cntrl:]]/}
     __zrd_log 2 "macOS version from sw_vers: $version"
@@ -576,13 +577,21 @@ __zrd_detect_macos_version() {
     build=${build_output//[[:cntrl:]]/}
     __zrd_log 2 "macOS build from sw_vers: $build"
   fi
-  if [[ $version == "unknown" ]] && [[ -r /System/Library/CoreServices/SystemVersion.plist ]]; then
-    if plist_output=$(__zrd_exec_whitelisted plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && plist_output=$(plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null); }; then
-      version=$(echo "$plist_output" | grep -E '(ProductUserVisibleVersion|ProductVersion)' | head -1 | sed 's/.*=> "\([^"]*\)".*/\1/')
-      [[ -z $build ]] && build=$(echo "$plist_output" | grep 'ProductBuildVersion' | sed 's/.*=> "\([^"]*\)".*/\1/')
+
+  if [[ $version == "unknown" && -r $plist ]] && __zrd_find_cmd plutil >/dev/null 2>&1; then
+    # Prefer precise extraction (no grep/sed)
+    local pv
+    pv=$(__zrd_exec_whitelisted plutil -extract ProductUserVisibleVersion raw -o - "$plist" 2>/dev/null) || \
+      pv=$(__zrd_exec_whitelisted plutil -extract ProductVersion raw -o - "$plist" 2>/dev/null)
+    [[ -n $pv ]] && version=${pv//[[:cntrl:]]/}
+    if [[ $build == "unknown" ]]; then
+      local bv
+      bv=$(__zrd_exec_whitelisted plutil -extract ProductBuildVersion raw -o - "$plist" 2>/dev/null)
+      [[ -n $bv ]] && build=${bv//[[:cntrl:]]/}
+    fi
       __zrd_log 2 "macOS version from plist: $version, build: $build"
     fi
-  fi
+
   if [[ $version != "unknown" ]]; then
     case $version in
       15.*) codename="Sequoia" ;;
