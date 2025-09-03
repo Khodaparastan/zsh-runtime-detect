@@ -198,21 +198,21 @@ __zrd_find_cmd() {
 }
 
 __zrd_sanitize_exec_env() {
-  emulate -L zsh
-  # Return a sanitized environment for child processes (reduce locale surprises)
-  # Use with: env -i VARS... CMD
-  local -a envv=()
-  envv+=("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/run/current-system/sw/bin")
-  envv+=("HOME=$HOME")
-  envv+=("USER=${USER:-${USERNAME:-}}")
-  envv+=("LANG=C")
-  envv+=("LC_ALL=C")
-  envv+=("TZ=${TZ:-UTC}")
-  print -r -- "${(j: :)envv}"
+  emulate -L zsh -o no_aliases
+  # Populate $reply with a sanitized environment for child processes
+  # Intended use: env -i "${reply[@]}" -- CMD ARGS...
+  reply=(
+    "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/run/current-system/sw/bin"
+    "HOME=$HOME"
+    "USER=${USER:-${USERNAME:-}}"
+    "LANG=C"
+    "LC_ALL=C"
+    "TZ=${TZ:-UTC}"
+  )
 }
 
 __zrd_exec_whitelisted() {
-  emulate -L zsh -o pipe_fail
+  emulate -L zsh -o no_aliases
   local cmd=${1:?}
   shift
   [[ -n ${__ZRD_WHITELIST_CMDS[$cmd]:-} ]] || { __zrd_log 1 "Command not allowed: $cmd"; return 1; }
@@ -242,22 +242,25 @@ __zrd_exec_whitelisted() {
   {
     if (( ZRD_CFG_CMD_TIMEOUT > 0 )); then
       if (( ZRD_CFG_SANITIZE_ENV )); then
-        eval "env -i $(__zrd_sanitize_exec_env) \"$path\" \"$@\" " </dev/null >"$tf" 2>"$ef" &!
-        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT cat "$tf" >/dev/null 2>&1 # warm wait to sync timing
-        # Rerun with timeout wrapper properly:
-        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$path" "$@" >"$tf" 2>"$ef"
+        __zrd_sanitize_exec_env
+        local env_bin="/usr/bin/env"
+        [[ -x $env_bin ]] || env_bin="/bin/env"
+        [[ -x $env_bin ]] || env_bin="env"
+        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$env_bin" -i "${reply[@]}" -- "$path" "$@" >"$tf" 2>"$ef"
       else
       __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$path" "$@" >"$tf" 2>"$ef"
       fi
       rc=$?
-      if (( rc == 124 )); then
-        __zrd_log 1 "Command timed out [$cmd] after ${ZRD_CFG_CMD_TIMEOUT}s"
-      fi
+      (( rc == 124 )) && __zrd_log 1 "Command timed out [$cmd] after ${ZRD_CFG_CMD_TIMEOUT}s"
     else
       if (( ZRD_CFG_SANITIZE_ENV )); then
-        eval "env -i $(__zrd_sanitize_exec_env) \"$path\" \"$@\" " </dev/null >"$tf" 2>"$ef"
+        __zrd_sanitize_exec_env
+        local env_bin="/usr/bin/env"
+        [[ -x $env_bin ]] || env_bin="/bin/env"
+        [[ -x $env_bin ]] || env_bin="env"
+        "$env_bin" -i "${reply[@]}" -- "$path" "$@" >"$tf" 2>"$ef"
       else
-        "$path" "$@" </dev/null >"$tf" 2>"$ef"
+        "$path" "$@" >"$tf" 2>"$ef"
     fi
     rc=$?
     fi
