@@ -7,7 +7,7 @@
 
 > **Intelligent runtime environment detection for Zsh scripts and applications**
 
-A powerful, security-first Zsh library that provides comprehensive platform, architecture, and environment detection capabilities. Built for modern DevOps workflows, CI/CD pipelines, and cross-platform automation.
+A security-first Zsh library that provides platform, architecture, and environment detection capabilities. Built for modern DevOps workflows, CI/CD pipelines, and cross-platform automation.
 
 ## ✨ Features
 
@@ -44,7 +44,7 @@ A powerful, security-first Zsh library that provides comprehensive platform, arc
 
 ```bash
 # Download and source in your script
-curl -fsSL https://raw.githubusercontent.com/khodaparastan/zsh-runtime-detect/main/zrd.zsh -o zrd.zsh
+curl -fsSL https://github.com/Khodaparastan/zsh-runtime-detect/blob/main/zrd.zsh -o zrd.zsh
 source zrd.zsh
 ```
 
@@ -266,16 +266,6 @@ zsh-runtime-detect follows a layered architecture designed for reliability, perf
 - **Hyper-V**: Windows and Azure VMs
 - **Xen**: Citrix and open-source implementations
 
-## 📖 Examples
-
-Comprehensive examples are available in the [`examples/`](examples/) directory:
-
-- **[Basic Usage](examples/basic/)**: Getting started with detection and queries
-- **[Advanced Integration](examples/advanced/)**: Complex real-world scenarios
-- **[Shell Configuration](examples/shell-config/)**: Adaptive shell environments
-- **[Automation](examples/automation/)**: CI/CD and DevOps integration
-- **[Framework Integration](examples/integration/)**: Oh My Zsh plugins, Docker entrypoints
-
 ## 🚀 Installation
 
 ### Method 1: Direct Download
@@ -342,7 +332,6 @@ Typical performance characteristics:
 
 Memory usage: ~100KB for full detection data
 
-
 ### Development Setup
 
 ```bash
@@ -374,7 +363,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-
 
 Made with ❤️ for the Zsh community
 
