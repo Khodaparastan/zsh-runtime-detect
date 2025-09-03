@@ -57,7 +57,8 @@ if (( ${+__ZRD_MODULE_LOADED} )); then
                  __zrd_read_regular_file __zrd_parse_kv __zrd_cache_signature __zrd_cache_valid \
                  __zrd_normalize_platform __zrd_normalize_arch __zrd_hostname \
                  __zrd_detect_wsl __zrd_detect_container __zrd_detect_vm \
-                 __zrd_detect_linux_distro __zrd_collect_uname 2>/dev/null
+                 __zrd_detect_linux_distro __zrd_detect_macos_version __zrd_collect_uname \
+                 __zrd_bool __zrd_sanitize_exec_env 2>/dev/null
     fi
   else
     [[ ${ZRD_CFG_DEBUG:-0} -ge 1 ]] && print -P "%F{yellow}[platform] Module already loaded%f" >&2
@@ -154,6 +155,17 @@ __zrd_json_escape() {
   print -r -- "$s"
 }
 
+__zrd_bool() {
+  emulate -L zsh
+  # Print boolean as "true"/"false" if ZRD_CFG_JSON_BOOL=1 else 1/0
+  local -i v=${1:-0}
+  if (( ZRD_CFG_JSON_BOOL )); then
+    (( v )) && print -r -- "true" || print -r -- "false"
+  else
+    print -r -- "$v"
+  fi
+}
+
 #===============================================================================
 # Configuration validation
 #===============================================================================
@@ -206,6 +218,20 @@ __zrd_find_cmd() {
   fi
   __ZRD_CMD_PATH_CACHE[$name]="!"
   return 1
+}
+
+__zrd_sanitize_exec_env() {
+  emulate -L zsh
+  # Return a sanitized environment for child processes (reduce locale surprises)
+  # Use with: env -i VARS... CMD
+  local -a envv=()
+  envv+=("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/run/current-system/sw/bin")
+  envv+=("HOME=$HOME")
+  envv+=("USER=${USER:-${USERNAME:-}}")
+  envv+=("LANG=C")
+  envv+=("LC_ALL=C")
+  envv+=("TZ=${TZ:-UTC}")
+  print -r -- "${(j: :)envv}"
 }
 
 __zrd_exec_whitelisted() {
@@ -1215,8 +1241,8 @@ zrd_cleanup() {
     __zrd_normalize_platform __zrd_normalize_arch __zrd_hostname
     __zrd_detect_wsl __zrd_detect_container __zrd_detect_vm
     __zrd_detect_linux_distro __zrd_detect_macos_version __zrd_collect_uname
+    __zrd_bool __zrd_sanitize_exec_env
   )
-  local fn
   for fn in "${fns[@]}"; do
     unfunction "$fn" 2>/dev/null
   done
