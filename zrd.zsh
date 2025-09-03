@@ -92,14 +92,13 @@ typeset -grA __ZRD_WHITELIST_CMDS=(
   sw_vers "/usr/bin/sw_vers"
   plutil "/usr/bin/plutil"
   lsb_release "/usr/bin/lsb_release:/bin/lsb_release:/run/current-system/sw/bin/lsb_release"
-  grep "/bin/grep:/usr/bin/grep:/opt/homebrew/bin/grep:/usr/local/bin/grep:/run/current-system/sw/bin/grep"
 )
 
 #===============================================================================
 # Logging and utilities
 #===============================================================================
 __zrd_log() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -i level=${1:-1}
   shift
   (( ZRD_CFG_DEBUG >= level )) || return 0
@@ -115,14 +114,14 @@ __zrd_log() {
 }
 
 __zrd_now() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local t
   t=$(date +%s 2>/dev/null) || t=$SECONDS
   print -r -- "$t"
 }
 
 __zrd_json_escape() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local s=${1-}
   s=${s//\\/\\\\}
   s=${s//\"/\\\"}
@@ -135,7 +134,7 @@ __zrd_json_escape() {
 }
 
 __zrd_bool() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   # Print boolean as "true"/"false" if ZRD_CFG_JSON_BOOL=1 else 1/0
   local -i v=${1:-0}
   if (( ZRD_CFG_JSON_BOOL )); then
@@ -149,7 +148,7 @@ __zrd_bool() {
 # Configuration validation
 #===============================================================================
 __zrd_validate_config() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -i changed=0
   local -a checks=(
     "ZRD_CFG_AUTO_DETECT:0:1:0"
@@ -179,7 +178,7 @@ __zrd_validate_config
 # Secure command and file helpers
 #===============================================================================
 __zrd_find_cmd() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local name=${1:?}
   local cached
   if cached=${__ZRD_CMD_PATH_CACHE[$name]}; then
@@ -283,7 +282,7 @@ __zrd_exec_whitelisted() {
 }
 
 __zrd_with_timeout() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -i seconds=${1:?}
   shift
   local timeout_cmd
@@ -309,7 +308,7 @@ __zrd_with_timeout() {
 }
 
 __zrd_read_regular_file() {
-  emulate -L zsh -o extended_glob
+  emulate -L zsh -o no_aliases -o extended_glob
   local file=${1:?} max=${2:-$ZRD_CFG_MAX_FILE_SIZE}
   (( ${#file} <= 256 )) || return 1
   [[ -f $file && -r $file ]] || return 1
@@ -343,7 +342,7 @@ __zrd_read_regular_file() {
 }
 
 __zrd_parse_kv() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local content=${1:?} key=${2:?}
   [[ $key == [A-Za-z_][A-Za-z0-9_]* ]] || { __zrd_log 1 "Invalid key: $key"; return 1; }
   local U=${key:u} L=${key:l} line val
@@ -394,7 +393,7 @@ __zrd_cache_valid() {
 }
 
 __zrd_normalize_platform() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local p=${1:l}
   case $p in
     darwin*|macos*) print -r -- "darwin" ;;
@@ -415,7 +414,7 @@ __zrd_normalize_platform() {
 }
 
 __zrd_normalize_arch() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local a=${1:l}
   if [[ $a == *-* ]]; then
     a=${a%%-*}
@@ -449,7 +448,7 @@ __zrd_normalize_arch() {
 }
 
 __zrd_hostname() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -aU sources=()
   local -a envs=(HOST HOSTNAME COMPUTERNAME)
   local v out
@@ -484,7 +483,7 @@ __zrd_hostname() {
 }
 
 __zrd_detect_wsl() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   [[ ${1:-} == linux ]] || return 1
   local -a vars=(WSL_DISTRO_NAME WSLENV WSL_INTEROP WSL2_INTEROP)
   local v
@@ -504,7 +503,7 @@ __zrd_detect_wsl() {
 }
 
 __zrd_detect_container() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   [[ -r /.dockerenv || -f /.containerenv ]] && return 0
   local -a vars=(container KUBERNETES_SERVICE_HOST DOCKER_CONTAINER PODMAN_CONTAINER)
   local v
@@ -529,7 +528,7 @@ __zrd_detect_container() {
 }
 
 __zrd_detect_vm() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local platform=${1:?}
   if [[ $platform == linux ]]; then
     local -a dmi=(
@@ -608,7 +607,7 @@ __zrd_detect_macos_version() {
 }
 
 __zrd_detect_linux_distro() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local d="unknown" v="unknown" c="unknown" s
   # lsb_release
   if __zrd_find_cmd lsb_release >/dev/null 2>&1; then
@@ -698,7 +697,7 @@ __zrd_detect_linux_distro() {
 }
 
 __zrd_collect_uname() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -A info
   local res
   res=$(__zrd_exec_whitelisted uname -s 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -s 2>/dev/null) }
@@ -723,7 +722,7 @@ __zrd_collect_uname() {
 # Core detection orchestration
 #===============================================================================
 zrd_detect() {
-  emulate -L zsh -o pipe_fail
+  emulate -L zsh -o no_aliases -o pipe_fail
   __zrd_cache_valid && return 0
   __zrd_log 2 "Detecting platform and environment"
   local start=$(__zrd_now)
@@ -875,7 +874,7 @@ zrd_detect() {
 # Public API
 #===============================================================================
 zrd_available() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   if (( __ZRD_CACHE_DETECTED )); then
     return 0
   elif (( ${ZRD_CFG_AUTO_DETECT:-0} == 1 )); then
@@ -886,20 +885,20 @@ zrd_available() {
 }
 
 zrd_refresh() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   __ZRD_CACHE_DETECTED=0
   __ZRD_CACHE_TIME=0
   zrd_detect
 }
 
 zrd_summary() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   printf "%s/%s" "$ZRD_PLATFORM" "$ZRD_ARCH"
 }
 
 zrd_info() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   local type=${1:-summary}
   case $type in
@@ -1021,7 +1020,7 @@ zrd_info() {
 }
 
 zrd_is() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local target=${1:?Missing platform target}
   zrd_available || return 1
   case ${target:l} in
@@ -1161,7 +1160,7 @@ zrd_paths() {
 }
 
 zrd_status() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   print -P "%F{cyan}Platform Detection Module%f"
   print -P "  %F{yellow}Version:%f $__ZRD_MODULE_VERSION (API: $__ZRD_API_VERSION)"
   print -P "  %F{yellow}Loaded:%f ${__ZRD_MODULE_LOADED:+Yes}"
