@@ -8,7 +8,7 @@
 # detailed system information with security-focused design and intelligent caching.
 #
 # Repository: https://github.com/khdaparastan/zsh-runtime-detect
-# Version:    2.3.0
+# Version:    2.3.1
 # API:        2
 # License:    MIT
 # Author:     khodaparastan <mohammad@khodapastan.com>
@@ -26,46 +26,25 @@
 #------------------------------------------------------------------------------
 # Module version and API info
 #------------------------------------------------------------------------------
-typeset -gr __ZRD_MODULE_VERSION="2.3.0"
-typeset -gr __ZRD_API_VERSION="2"
+typeset -g __ZRD_THIS_VERSION="2.3.1"
+typeset -g __ZRD_API_VERSION="2"
 
 #------------------------------------------------------------------------------
 # Early reload/version guard with robust cleanup
 #------------------------------------------------------------------------------
 if (( ${+__ZRD_MODULE_LOADED} )); then
-  if [[ ${__ZRD_MODULE_VERSION:-} != "2.3.0" ]]; then
+  if [[ ${__ZRD_MODULE_VERSION:-} == "$__ZRD_THIS_VERSION" ]]; then
+    [[ ${ZRD_CFG_DEBUG:-0} -ge 1 ]] && print -P "%F{yellow}[platform] Module already loaded%f" >&2
+    return 0
+  fi
     emulate -L zsh
     print -P "%F{yellow}[platform] Version mismatch, reloading...%f" >&2
     if typeset -f zrd_cleanup >/dev/null 2>&1; then
       zrd_cleanup
-    else
-      emulate -L zsh
-      unset __ZRD_MODULE_LOADED __ZRD_CACHE_DETECTED __ZRD_CACHE_TIME \
-            __ZRD_CACHE_SIGNATURE __ZRD_CACHE_VERSION 2>/dev/null
-      unset ZRD_CFG_AUTO_DETECT ZRD_CFG_DEBUG ZRD_CFG_CACHE_TTL \
-            ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT ZRD_CFG_STRICT_CMDS \
-            ZRD_CFG_JSON_BOOL ZRD_CFG_SANITIZE_ENV 2>/dev/null
-      unset ZRD_PLATFORM ZRD_ARCH ZRD_KERNEL ZRD_KERNEL_RELEASE ZRD_KERNEL_VERSION \
-            ZRD_HOSTNAME ZRD_USERNAME ZRD_DISTRO ZRD_DISTRO_VERSION ZRD_DISTRO_CODENAME \
-            ZRD_IS_MACOS ZRD_IS_LINUX ZRD_IS_BSD ZRD_IS_UNIX ZRD_IS_ARM ZRD_IS_X86_64 \
-            ZRD_IS_WSL ZRD_IS_CONTAINER ZRD_IS_VM ZRD_IS_TERMUX ZRD_IS_CHROOT \
-            ZRD_IS_INTERACTIVE ZRD_IS_SSH ZRD_IS_ROOT ZRD_IS_CI 2>/dev/null
-      unfunction zrd_detect zrd_available zrd_refresh zrd_summary zrd_info zrd_is \
-                 zrd_arch zrd_paths zrd_status zrd_cleanup 2>/dev/null
-      unfunction __zrd_log __zrd_now __zrd_json_escape __zrd_validate_config \
-                 __zrd_find_cmd __zrd_exec_whitelisted __zrd_with_timeout \
-                 __zrd_read_regular_file __zrd_parse_kv __zrd_cache_signature __zrd_cache_valid \
-                 __zrd_normalize_platform __zrd_normalize_arch __zrd_hostname \
-                 __zrd_detect_wsl __zrd_detect_container __zrd_detect_vm \
-                 __zrd_detect_linux_distro __zrd_detect_macos_version __zrd_collect_uname \
-                 __zrd_bool __zrd_sanitize_exec_env 2>/dev/null
-    fi
-  else
-    [[ ${ZRD_CFG_DEBUG:-0} -ge 1 ]] && print -P "%F{yellow}[platform] Module already loaded%f" >&2
-    return 0
   fi
 fi
 
+typeset -g __ZRD_MODULE_VERSION="$__ZRD_THIS_VERSION"
 typeset -gi __ZRD_MODULE_LOADED=1
 
 #------------------------------------------------------------------------------
@@ -113,14 +92,13 @@ typeset -grA __ZRD_WHITELIST_CMDS=(
   sw_vers "/usr/bin/sw_vers"
   plutil "/usr/bin/plutil"
   lsb_release "/usr/bin/lsb_release:/bin/lsb_release:/run/current-system/sw/bin/lsb_release"
-  grep "/bin/grep:/usr/bin/grep:/opt/homebrew/bin/grep:/usr/local/bin/grep:/run/current-system/sw/bin/grep"
 )
 
 #===============================================================================
 # Logging and utilities
 #===============================================================================
 __zrd_log() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -i level=${1:-1}
   shift
   (( ZRD_CFG_DEBUG >= level )) || return 0
@@ -136,14 +114,14 @@ __zrd_log() {
 }
 
 __zrd_now() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local t
   t=$(date +%s 2>/dev/null) || t=$SECONDS
   print -r -- "$t"
 }
 
 __zrd_json_escape() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local s=${1-}
   s=${s//\\/\\\\}
   s=${s//\"/\\\"}
@@ -156,7 +134,7 @@ __zrd_json_escape() {
 }
 
 __zrd_bool() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   # Print boolean as "true"/"false" if ZRD_CFG_JSON_BOOL=1 else 1/0
   local -i v=${1:-0}
   if (( ZRD_CFG_JSON_BOOL )); then
@@ -170,7 +148,7 @@ __zrd_bool() {
 # Configuration validation
 #===============================================================================
 __zrd_validate_config() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -i changed=0
   local -a checks=(
     "ZRD_CFG_AUTO_DETECT:0:1:0"
@@ -200,7 +178,7 @@ __zrd_validate_config
 # Secure command and file helpers
 #===============================================================================
 __zrd_find_cmd() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local name=${1:?}
   local cached
   if cached=${__ZRD_CMD_PATH_CACHE[$name]}; then
@@ -220,21 +198,21 @@ __zrd_find_cmd() {
 }
 
 __zrd_sanitize_exec_env() {
-  emulate -L zsh
-  # Return a sanitized environment for child processes (reduce locale surprises)
-  # Use with: env -i VARS... CMD
-  local -a envv=()
-  envv+=("PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/run/current-system/sw/bin")
-  envv+=("HOME=$HOME")
-  envv+=("USER=${USER:-${USERNAME:-}}")
-  envv+=("LANG=C")
-  envv+=("LC_ALL=C")
-  envv+=("TZ=${TZ:-UTC}")
-  print -r -- "${(j: :)envv}"
+  emulate -L zsh -o no_aliases
+  # Populate $reply with a sanitized environment for child processes
+  # Intended use: env -i "${reply[@]}" -- CMD ARGS...
+  reply=(
+    "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/run/current-system/sw/bin"
+    "HOME=$HOME"
+    "USER=${USER:-${USERNAME:-}}"
+    "LANG=C"
+    "LC_ALL=C"
+    "TZ=${TZ:-UTC}"
+  )
 }
 
 __zrd_exec_whitelisted() {
-  emulate -L zsh -o pipe_fail
+  emulate -L zsh -o no_aliases
   local cmd=${1:?}
   shift
   [[ -n ${__ZRD_WHITELIST_CMDS[$cmd]:-} ]] || { __zrd_log 1 "Command not allowed: $cmd"; return 1; }
@@ -264,22 +242,25 @@ __zrd_exec_whitelisted() {
   {
     if (( ZRD_CFG_CMD_TIMEOUT > 0 )); then
       if (( ZRD_CFG_SANITIZE_ENV )); then
-        eval "env -i $(__zrd_sanitize_exec_env) \"$path\" \"$@\" " </dev/null >"$tf" 2>"$ef" &!
-        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT cat "$tf" >/dev/null 2>&1 # warm wait to sync timing
-        # Rerun with timeout wrapper properly:
-        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$path" "$@" >"$tf" 2>"$ef"
+        __zrd_sanitize_exec_env
+        local env_bin="/usr/bin/env"
+        [[ -x $env_bin ]] || env_bin="/bin/env"
+        [[ -x $env_bin ]] || env_bin="env"
+        __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$env_bin" -i "${reply[@]}" -- "$path" "$@" >"$tf" 2>"$ef"
       else
       __zrd_with_timeout $ZRD_CFG_CMD_TIMEOUT "$path" "$@" >"$tf" 2>"$ef"
       fi
       rc=$?
-      if (( rc == 124 )); then
-        __zrd_log 1 "Command timed out [$cmd] after ${ZRD_CFG_CMD_TIMEOUT}s"
-      fi
+      (( rc == 124 )) && __zrd_log 1 "Command timed out [$cmd] after ${ZRD_CFG_CMD_TIMEOUT}s"
     else
       if (( ZRD_CFG_SANITIZE_ENV )); then
-        eval "env -i $(__zrd_sanitize_exec_env) \"$path\" \"$@\" " </dev/null >"$tf" 2>"$ef"
+        __zrd_sanitize_exec_env
+        local env_bin="/usr/bin/env"
+        [[ -x $env_bin ]] || env_bin="/bin/env"
+        [[ -x $env_bin ]] || env_bin="env"
+        "$env_bin" -i "${reply[@]}" -- "$path" "$@" >"$tf" 2>"$ef"
       else
-        "$path" "$@" </dev/null >"$tf" 2>"$ef"
+        "$path" "$@" >"$tf" 2>"$ef"
     fi
     rc=$?
     fi
@@ -292,9 +273,7 @@ __zrd_exec_whitelisted() {
     if cat_path=$(__zrd_find_cmd "cat" 2>/dev/null); then
       "$cat_path" -- "$tf"
     else
-      if (( ZRD_CFG_STRICT_CMDS )); then
-        : # do not fallback in strict mode
-      else
+      if (( ! ZRD_CFG_STRICT_CMDS )); then
       command cat -- "$tf"
     fi
   fi
@@ -304,7 +283,7 @@ __zrd_exec_whitelisted() {
 }
 
 __zrd_with_timeout() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -i seconds=${1:?}
   shift
   local timeout_cmd
@@ -312,7 +291,7 @@ __zrd_with_timeout() {
     "$timeout_cmd" "$seconds" "$@"
     return $?
   fi
-  # Fallback shim
+  # Fallback shim (best effort)
   "$@" </dev/null & local -i pid=$!
   local -F tick=0.25 elapsed=0.0
   while kill -0 $pid 2>/dev/null; do
@@ -330,7 +309,7 @@ __zrd_with_timeout() {
 }
 
 __zrd_read_regular_file() {
-  emulate -L zsh -o extended_glob
+  emulate -L zsh -o no_aliases -o extended_glob
   local file=${1:?} max=${2:-$ZRD_CFG_MAX_FILE_SIZE}
   (( ${#file} <= 256 )) || return 1
   [[ -f $file && -r $file ]] || return 1
@@ -364,7 +343,7 @@ __zrd_read_regular_file() {
 }
 
 __zrd_parse_kv() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local content=${1:?} key=${2:?}
   [[ $key == [A-Za-z_][A-Za-z0-9_]* ]] || { __zrd_log 1 "Invalid key: $key"; return 1; }
   local U=${key:u} L=${key:l} line val
@@ -391,16 +370,15 @@ __zrd_parse_kv() {
 # Detection helpers
 #===============================================================================
 __zrd_cache_signature() {
-  emulate -L zsh
-  # Include uname -s/-m for extra stability across unusual shells
+  emulate -L zsh -o no_aliases
   local us um
-  us=$(uname -s 2>/dev/null)
-  um=$(uname -m 2>/dev/null)
+  us=$(__zrd_exec_whitelisted uname -s 2>/dev/null) || us=${OSTYPE:-}
+  um=$(__zrd_exec_whitelisted uname -m 2>/dev/null) || um=${HOSTTYPE:-}
   print -r -- "${OSTYPE:-}:${MACHTYPE:-}:${HOSTTYPE:-}:${EUID:-}:${UID:-}:${__ZRD_MODULE_VERSION:-}:${us}:${um}"
 }
 
 __zrd_cache_valid() {
-  emulate -L zsh -o extended_glob
+  emulate -L zsh -o no_aliases -o extended_glob
   (( __ZRD_CACHE_DETECTED )) || return 1
   local now=$(__zrd_now)
   if [[ $__ZRD_CACHE_TIME == <-> ]]; then
@@ -415,7 +393,7 @@ __zrd_cache_valid() {
 }
 
 __zrd_normalize_platform() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local p=${1:l}
   case $p in
     darwin*|macos*) print -r -- "darwin" ;;
@@ -436,7 +414,7 @@ __zrd_normalize_platform() {
 }
 
 __zrd_normalize_arch() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local a=${1:l}
   if [[ $a == *-* ]]; then
     a=${a%%-*}
@@ -470,7 +448,7 @@ __zrd_normalize_arch() {
 }
 
 __zrd_hostname() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -aU sources=()
   local -a envs=(HOST HOSTNAME COMPUTERNAME)
   local v out
@@ -505,7 +483,7 @@ __zrd_hostname() {
 }
 
 __zrd_detect_wsl() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   [[ ${1:-} == linux ]] || return 1
   local -a vars=(WSL_DISTRO_NAME WSLENV WSL_INTEROP WSL2_INTEROP)
   local v
@@ -525,7 +503,7 @@ __zrd_detect_wsl() {
 }
 
 __zrd_detect_container() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   [[ -r /.dockerenv || -f /.containerenv ]] && return 0
   local -a vars=(container KUBERNETES_SERVICE_HOST DOCKER_CONTAINER PODMAN_CONTAINER)
   local v
@@ -550,7 +528,7 @@ __zrd_detect_container() {
 }
 
 __zrd_detect_vm() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local platform=${1:?}
   if [[ $platform == linux ]]; then
     local -a dmi=(
@@ -587,9 +565,10 @@ __zrd_detect_vm() {
 }
 
 __zrd_detect_macos_version() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local version="unknown" codename="unknown" build="unknown"
-  local ver_output build_output plist_output
+  local ver_output build_output plist="/System/Library/CoreServices/SystemVersion.plist"
+
   if ver_output=$(__zrd_exec_whitelisted sw_vers -productVersion 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && ver_output=$(sw_vers -productVersion 2>/dev/null); }; then
     version=${ver_output//[[:cntrl:]]/}
     __zrd_log 2 "macOS version from sw_vers: $version"
@@ -598,13 +577,21 @@ __zrd_detect_macos_version() {
     build=${build_output//[[:cntrl:]]/}
     __zrd_log 2 "macOS build from sw_vers: $build"
   fi
-  if [[ $version == "unknown" ]] && [[ -r /System/Library/CoreServices/SystemVersion.plist ]]; then
-    if plist_output=$(__zrd_exec_whitelisted plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && plist_output=$(plutil -p /System/Library/CoreServices/SystemVersion.plist 2>/dev/null); }; then
-      version=$(echo "$plist_output" | grep -E '(ProductUserVisibleVersion|ProductVersion)' | head -1 | sed 's/.*=> "\([^"]*\)".*/\1/')
-      [[ -z $build ]] && build=$(echo "$plist_output" | grep 'ProductBuildVersion' | sed 's/.*=> "\([^"]*\)".*/\1/')
+
+  if [[ $version == "unknown" && -r $plist ]] && __zrd_find_cmd plutil >/dev/null 2>&1; then
+    # Prefer precise extraction (no grep/sed)
+    local pv
+    pv=$(__zrd_exec_whitelisted plutil -extract ProductUserVisibleVersion raw -o - "$plist" 2>/dev/null) || \
+      pv=$(__zrd_exec_whitelisted plutil -extract ProductVersion raw -o - "$plist" 2>/dev/null)
+    [[ -n $pv ]] && version=${pv//[[:cntrl:]]/}
+    if [[ $build == "unknown" ]]; then
+      local bv
+      bv=$(__zrd_exec_whitelisted plutil -extract ProductBuildVersion raw -o - "$plist" 2>/dev/null)
+      [[ -n $bv ]] && build=${bv//[[:cntrl:]]/}
+    fi
       __zrd_log 2 "macOS version from plist: $version, build: $build"
     fi
-  fi
+
   if [[ $version != "unknown" ]]; then
     case $version in
       15.*) codename="Sequoia" ;;
@@ -629,7 +616,7 @@ __zrd_detect_macos_version() {
 }
 
 __zrd_detect_linux_distro() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local d="unknown" v="unknown" c="unknown" s
   # lsb_release
   if __zrd_find_cmd lsb_release >/dev/null 2>&1; then
@@ -652,7 +639,6 @@ __zrd_detect_linux_distro() {
       v=$(__zrd_parse_kv "$s" "VERSION_ID" 2>/dev/null) || v="unknown"
       c=$(__zrd_parse_kv "$s" "VERSION_CODENAME" 2>/dev/null)
       [[ -z $c ]] && c=$(__zrd_parse_kv "$s" "UBUNTU_CODENAME" 2>/dev/null)
-      # Do not substitute PRETTY_NAME as codename; keep unknown for codename if missing
       [[ -z $c ]] && c="unknown"
       __zrd_log 2 "Linux distro from os-release: $d $v ($c)"
     fi
@@ -719,7 +705,7 @@ __zrd_detect_linux_distro() {
 }
 
 __zrd_collect_uname() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local -A info
   local res
   res=$(__zrd_exec_whitelisted uname -s 2>/dev/null) || { (( ! ZRD_CFG_STRICT_CMDS )) && res=$(uname -s 2>/dev/null) }
@@ -744,7 +730,7 @@ __zrd_collect_uname() {
 # Core detection orchestration
 #===============================================================================
 zrd_detect() {
-  emulate -L zsh -o pipe_fail
+  emulate -L zsh -o no_aliases -o pipe_fail
   __zrd_cache_valid && return 0
   __zrd_log 2 "Detecting platform and environment"
   local start=$(__zrd_now)
@@ -896,7 +882,7 @@ zrd_detect() {
 # Public API
 #===============================================================================
 zrd_available() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   if (( __ZRD_CACHE_DETECTED )); then
     return 0
   elif (( ${ZRD_CFG_AUTO_DETECT:-0} == 1 )); then
@@ -907,20 +893,20 @@ zrd_available() {
 }
 
 zrd_refresh() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   __ZRD_CACHE_DETECTED=0
   __ZRD_CACHE_TIME=0
   zrd_detect
 }
 
 zrd_summary() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   printf "%s/%s" "$ZRD_PLATFORM" "$ZRD_ARCH"
 }
 
 zrd_info() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   local type=${1:-summary}
   case $type in
@@ -949,14 +935,14 @@ zrd_info() {
         printf "%s %s" "$ZRD_DISTRO" "$ZRD_DISTRO_VERSION"
         [[ $ZRD_DISTRO_CODENAME != "unknown" ]] && printf " (%s)" "$ZRD_DISTRO_CODENAME"
       else
-        echo "N/A"
+        print -r -- "N/A"
       fi
       ;;
     hostname)
-      echo "$ZRD_HOSTNAME"
+      print -r -- "$ZRD_HOSTNAME"
       ;;
     username)
-      echo "$ZRD_USERNAME"
+      print -r -- "$ZRD_USERNAME"
       ;;
     flags)
       local -a active=()
@@ -1028,10 +1014,10 @@ zrd_info() {
       printf '}\n'
       ;;
     version)
-      echo "$__ZRD_MODULE_VERSION"
+      print -r -- "$__ZRD_MODULE_VERSION"
       ;;
     api-version)
-      echo "$__ZRD_API_VERSION"
+      print -r -- "$__ZRD_API_VERSION"
       ;;
     *)
       __zrd_log 0 "Unknown info type: $type"
@@ -1042,7 +1028,7 @@ zrd_info() {
 }
 
 zrd_is() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   local target=${1:?Missing platform target}
   zrd_available || return 1
   case ${target:l} in
@@ -1069,44 +1055,44 @@ zrd_is() {
 }
 
 zrd_arch() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   local q=${1:-name}
   case $q in
-    name) echo "$ZRD_ARCH" ;;
+    name) print -r -- "$ZRD_ARCH" ;;
     bits)
       case $ZRD_ARCH in
-        x86_64|aarch64|powerpc64|mips64|s390x|alpha|ia64|riscv64) echo "64" ;;
-        i386|arm|mips|s390|powerpc|riscv) echo "32" ;;
-        *) echo "unknown" ;;
+        x86_64|aarch64|powerpc64|mips64|s390x|alpha|ia64|riscv64) print -r -- "64" ;;
+        i386|arm|mips|s390|powerpc|riscv) print -r -- "32" ;;
+        *) print -r -- "unknown" ;;
       esac
       ;;
     family)
       case $ZRD_ARCH in
-        x86_64|i386) echo "x86" ;;
-        aarch64|arm) echo "arm" ;;
-        powerpc|powerpc64) echo "power" ;;
-        mips|mips64) echo "mips" ;;
-        s390|s390x) echo "s390" ;;
-        riscv|riscv64) echo "riscv" ;;
-        *) echo "$ZRD_ARCH" ;;
+        x86_64|i386) print -r -- "x86" ;;
+        aarch64|arm) print -r -- "arm" ;;
+        powerpc|powerpc64) print -r -- "power" ;;
+        mips|mips64) print -r -- "mips" ;;
+        s390|s390x) print -r -- "s390" ;;
+        riscv|riscv64) print -r -- "riscv" ;;
+        *) print -r -- "$ZRD_ARCH" ;;
       esac
       ;;
     endian)
       case $ZRD_ARCH in
-        x86_64|i386|aarch64|arm|mips|mips64|s390|s390x|powerpc64|riscv|riscv64) echo "little" ;;
-        powerpc|sparc) echo "big" ;;
-        *) echo "unknown" ;;
+        x86_64|i386|aarch64|arm|mips|mips64|s390|s390x|powerpc64|riscv|riscv64) print -r -- "little" ;;
+        powerpc|sparc) print -r -- "big" ;;
+        *) print -r -- "unknown" ;;
       esac
       ;;
     instruction-set|isa)
       case $ZRD_ARCH in
-        x86_64) echo "x86-64" ;;
-        i386) echo "x86" ;;
-        aarch64) echo "ARMv8-A" ;;
-        arm) echo "ARMv7" ;;
-        riscv64|riscv) echo "RV64I/RV32I" ;;
-        *) echo "$ZRD_ARCH" ;;
+        x86_64) print -r -- "x86-64" ;;
+        i386) print -r -- "x86" ;;
+        aarch64) print -r -- "ARMv8-A" ;;
+        arm) print -r -- "ARMv7" ;;
+        riscv64|riscv) print -r -- "RV64I/RV32I" ;;
+        *) print -r -- "$ZRD_ARCH" ;;
       esac
       ;;
     *)
@@ -1117,61 +1103,61 @@ zrd_arch() {
 }
 
 zrd_paths() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   local kind=${1:-temp}
   case $kind in
     temp|tmp)
       if (( ZRD_IS_MACOS )); then
-        echo "${TMPDIR:-/tmp}"
+        print -r -- "${TMPDIR:-/tmp}"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
+        print -r -- "${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
       else
-        echo "${TMPDIR:-/tmp}"
+        print -r -- "${TMPDIR:-/tmp}"
       fi
       ;;
     config)
       if (( ZRD_IS_MACOS )); then
-        echo "${HOME}/Library/Preferences"
+        print -r -- "${HOME}/Library/Preferences"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${HOME}/.config"
+        print -r -- "${HOME}/.config"
       elif (( ZRD_IS_UNIX )); then
-        echo "${XDG_CONFIG_HOME:-$HOME/.config}"
+        print -r -- "${XDG_CONFIG_HOME:-$HOME/.config}"
       else
-        echo "$HOME"
+        print -r -- "$HOME"
       fi
       ;;
     cache)
       if (( ZRD_IS_MACOS )); then
-        echo "${HOME}/Library/Caches"
+        print -r -- "${HOME}/Library/Caches"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${HOME}/.cache"
+        print -r -- "${HOME}/.cache"
       elif (( ZRD_IS_UNIX )); then
-        echo "${XDG_CACHE_HOME:-$HOME/.cache}"
+        print -r -- "${XDG_CACHE_HOME:-$HOME/.cache}"
       else
-        echo "$HOME"
+        print -r -- "$HOME"
       fi
       ;;
     data)
       if (( ZRD_IS_MACOS )); then
-        echo "${HOME}/Library/Application Support"
+        print -r -- "${HOME}/Library/Application Support"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${HOME}/.local/share"
+        print -r -- "${HOME}/.local/share"
       elif (( ZRD_IS_UNIX )); then
-        echo "${XDG_DATA_HOME:-$HOME/.local/share}"
+        print -r -- "${XDG_DATA_HOME:-$HOME/.local/share}"
       else
-        echo "$HOME"
+        print -r -- "$HOME"
       fi
       ;;
     runtime)
       if (( ZRD_IS_UNIX )); then
-        echo "${XDG_RUNTIME_DIR:-/tmp}"
+        print -r -- "${XDG_RUNTIME_DIR:-/tmp}"
       else
-        echo "/tmp"
+        print -r -- "/tmp"
       fi
       ;;
     home)
-      echo "$HOME"
+      print -r -- "$HOME"
       ;;
     *)
       __zrd_log 0 "Unknown path type: $kind"
@@ -1182,7 +1168,7 @@ zrd_paths() {
 }
 
 zrd_status() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   print -P "%F{cyan}Platform Detection Module%f"
   print -P "  %F{yellow}Version:%f $__ZRD_MODULE_VERSION (API: $__ZRD_API_VERSION)"
   print -P "  %F{yellow}Loaded:%f ${__ZRD_MODULE_LOADED:+Yes}"
@@ -1205,12 +1191,12 @@ zrd_status() {
 }
 
 zrd_cleanup() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   unset __ZRD_CACHE_DETECTED __ZRD_CACHE_TIME __ZRD_CACHE_SIGNATURE __ZRD_CACHE_VERSION 2>/dev/null
   unset ZRD_CFG_AUTO_DETECT ZRD_CFG_DEBUG ZRD_CFG_CACHE_TTL ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT \
         ZRD_CFG_STRICT_CMDS ZRD_CFG_JSON_BOOL ZRD_CFG_SANITIZE_ENV 2>/dev/null
   unset __ZRD_CMD_PATH_CACHE 2>/dev/null
-  unset __ZRD_MODULE_LOADED 2>/dev/null
+  unset __ZRD_MODULE_LOADED __ZRD_MODULE_VERSION __ZRD_THIS_VERSION __ZRD_API_VERSION 2>/dev/null
 
   local -a vars=(
     ZRD_PLATFORM ZRD_ARCH ZRD_KERNEL ZRD_KERNEL_RELEASE ZRD_KERNEL_VERSION
