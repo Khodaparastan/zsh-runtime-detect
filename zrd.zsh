@@ -639,7 +639,6 @@ __zrd_detect_linux_distro() {
       v=$(__zrd_parse_kv "$s" "VERSION_ID" 2>/dev/null) || v="unknown"
       c=$(__zrd_parse_kv "$s" "VERSION_CODENAME" 2>/dev/null)
       [[ -z $c ]] && c=$(__zrd_parse_kv "$s" "UBUNTU_CODENAME" 2>/dev/null)
-      # Do not substitute PRETTY_NAME as codename; keep unknown for codename if missing
       [[ -z $c ]] && c="unknown"
       __zrd_log 2 "Linux distro from os-release: $d $v ($c)"
     fi
