@@ -398,7 +398,11 @@ __zrd_parse_kv() {
 #===============================================================================
 __zrd_cache_signature() {
   emulate -L zsh
-  print -r -- "${OSTYPE:-}:${MACHTYPE:-}:${HOSTTYPE:-}:${EUID:-}:${UID:-}:${__ZRD_MODULE_VERSION:-}"
+  # Include uname -s/-m for extra stability across unusual shells
+  local us um
+  us=$(uname -s 2>/dev/null)
+  um=$(uname -m 2>/dev/null)
+  print -r -- "${OSTYPE:-}:${MACHTYPE:-}:${HOSTTYPE:-}:${EUID:-}:${UID:-}:${__ZRD_MODULE_VERSION:-}:${us}:${um}"
 }
 
 __zrd_cache_valid() {
@@ -461,7 +465,8 @@ __zrd_normalize_arch() {
     powerpc*|power*|ppc) print -r -- "powerpc" ;;
     mips64el|mips64) print -r -- "mips64" ;;
     mipsel|mips*) print -r -- "mips" ;;
-    riscv64|riscv*) print -r -- "riscv" ;;
+    riscv64) print -r -- "riscv64" ;;
+    riscv*) print -r -- "riscv" ;;
     s390x) print -r -- "s390x" ;;
     s390*) print -r -- "s390" ;;
     loongarch*|loong64) print -r -- "loongarch" ;;
@@ -487,7 +492,7 @@ __zrd_hostname() {
   local -a files=("/etc/hostname" "/proc/sys/kernel/hostname" "/etc/nodename" "/etc/myname")
   local f
   for f in "${files[@]}"; do
-    out=$(__zrd_read_regular_file "$f" 128 2>/dev/null) || continue
+    out=$(__zrd_read_regular_file "$f" 256 2>/dev/null) || continue
     sources+=("$out")
   done
   sources+=("localhost" "unknown-host")
@@ -655,13 +660,12 @@ __zrd_detect_linux_distro() {
       v=$(__zrd_parse_kv "$s" "VERSION_ID" 2>/dev/null) || v="unknown"
       c=$(__zrd_parse_kv "$s" "VERSION_CODENAME" 2>/dev/null)
       [[ -z $c ]] && c=$(__zrd_parse_kv "$s" "UBUNTU_CODENAME" 2>/dev/null)
-      [[ -z $c ]] && c=$(__zrd_parse_kv "$s" "PRETTY_NAME" 2>/dev/null)
+      # Do not substitute PRETTY_NAME as codename; keep unknown for codename if missing
       [[ -z $c ]] && c="unknown"
       __zrd_log 2 "Linux distro from os-release: $d $v ($c)"
     fi
   fi
-
-  # Try /etc/lsb-release (Ubuntu/Debian style)
+  # /etc/lsb-release
   if [[ $d == "unknown" && -r /etc/lsb-release ]]; then
     s=$(__zrd_read_regular_file "/etc/lsb-release" 4096 2>/dev/null)
     if [[ -n $s ]]; then
@@ -689,6 +693,7 @@ __zrd_detect_linux_distro() {
       [rocky]="/etc/rocky-release"
       [almalinux]="/etc/almalinux-release"
       [oracle]="/etc/oracle-release"
+      [amazon]="/etc/system-release"
     )
     local k f
     for k f in "${(kv)files[@]}"; do
@@ -831,10 +836,10 @@ zrd_detect() {
     dver=${di#*:}; dver=${dver%%:*}
     dcode=${di##*:}
   elif [[ $platform == darwin ]]; then
-    local di
+    local di temp
     di=$(__zrd_detect_macos_version)
     distro=${di%%:*}
-    local temp=${di#*:}
+    temp=${di#*:}
     dver=${temp%%:*}
     temp=${temp#*:}
     dcode=${temp%%:*}
@@ -898,7 +903,7 @@ zrd_detect() {
       print -P "%F{green}[platform] Detection complete (${dt}s)%f"
       print -P "  %F{cyan}System:%f $ZRD_PLATFORM/$ZRD_ARCH ($ZRD_KERNEL $ZRD_KERNEL_RELEASE)"
       print -P "  %F{cyan}Host:%f $ZRD_HOSTNAME ($ZRD_USERNAME)"
-      [[ $ZRD_IS_LINUX -eq 1 ]] && print -P "  %F{cyan}Distro:%f $ZRD_DISTRO $ZRD_DISTRO_VERSION${ZRD_DISTRO_CODENAME:+ ($ZRD_DISTRO_CODENAME)}"
+      (( ZRD_IS_LINUX || ZRD_IS_MACOS )) && print -P "  %F{cyan}Distro:%f $ZRD_DISTRO $ZRD_DISTRO_VERSION${ZRD_DISTRO_CODENAME:+ ($ZRD_DISTRO_CODENAME)}"
       print -P "  %F{cyan}Flags:%f macOS=$ZRD_IS_MACOS Linux=$ZRD_IS_LINUX BSD=$ZRD_IS_BSD Unix=$ZRD_IS_UNIX"
       print -P "  %F{cyan}Arch:%f ARM=$ZRD_IS_ARM x86_64=$ZRD_IS_X86_64"
       print -P "  %F{cyan}Env:%f WSL=$ZRD_IS_WSL Container=$ZRD_IS_CONTAINER VM=$ZRD_IS_VM Root=$ZRD_IS_ROOT CI=$ZRD_IS_CI"
@@ -1075,8 +1080,8 @@ zrd_arch() {
     name) echo "$ZRD_ARCH" ;;
     bits)
       case $ZRD_ARCH in
-        x86_64|aarch64|powerpc64|mips64|s390x|alpha|ia64|riscv) echo "64" ;;
-        i386|arm|mips|s390|powerpc) echo "32" ;;
+        x86_64|aarch64|powerpc64|mips64|s390x|alpha|ia64|riscv64) echo "64" ;;
+        i386|arm|mips|s390|powerpc|riscv) echo "32" ;;
         *) echo "unknown" ;;
       esac
       ;;
@@ -1087,12 +1092,13 @@ zrd_arch() {
         powerpc|powerpc64) echo "power" ;;
         mips|mips64) echo "mips" ;;
         s390|s390x) echo "s390" ;;
+        riscv|riscv64) echo "riscv" ;;
         *) echo "$ZRD_ARCH" ;;
       esac
       ;;
     endian)
       case $ZRD_ARCH in
-        x86_64|i386|aarch64|arm|mips|mips64|s390|s390x|powerpc64) echo "little" ;;
+        x86_64|i386|aarch64|arm|mips|mips64|s390|s390x|powerpc64|riscv|riscv64) echo "little" ;;
         powerpc|sparc) echo "big" ;;
         *) echo "unknown" ;;
       esac
@@ -1103,6 +1109,7 @@ zrd_arch() {
         i386) echo "x86" ;;
         aarch64) echo "ARMv8-A" ;;
         arm) echo "ARMv7" ;;
+        riscv64|riscv) echo "RV64I/RV32I" ;;
         *) echo "$ZRD_ARCH" ;;
       esac
       ;;
