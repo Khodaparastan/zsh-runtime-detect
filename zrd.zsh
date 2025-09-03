@@ -935,14 +935,14 @@ zrd_info() {
         printf "%s %s" "$ZRD_DISTRO" "$ZRD_DISTRO_VERSION"
         [[ $ZRD_DISTRO_CODENAME != "unknown" ]] && printf " (%s)" "$ZRD_DISTRO_CODENAME"
       else
-        echo "N/A"
+        print -r -- "N/A"
       fi
       ;;
     hostname)
-      echo "$ZRD_HOSTNAME"
+      print -r -- "$ZRD_HOSTNAME"
       ;;
     username)
-      echo "$ZRD_USERNAME"
+      print -r -- "$ZRD_USERNAME"
       ;;
     flags)
       local -a active=()
@@ -1014,10 +1014,10 @@ zrd_info() {
       printf '}\n'
       ;;
     version)
-      echo "$__ZRD_MODULE_VERSION"
+      print -r -- "$__ZRD_MODULE_VERSION"
       ;;
     api-version)
-      echo "$__ZRD_API_VERSION"
+      print -r -- "$__ZRD_API_VERSION"
       ;;
     *)
       __zrd_log 0 "Unknown info type: $type"
@@ -1055,44 +1055,44 @@ zrd_is() {
 }
 
 zrd_arch() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   local q=${1:-name}
   case $q in
-    name) echo "$ZRD_ARCH" ;;
+    name) print -r -- "$ZRD_ARCH" ;;
     bits)
       case $ZRD_ARCH in
-        x86_64|aarch64|powerpc64|mips64|s390x|alpha|ia64|riscv64) echo "64" ;;
-        i386|arm|mips|s390|powerpc|riscv) echo "32" ;;
-        *) echo "unknown" ;;
+        x86_64|aarch64|powerpc64|mips64|s390x|alpha|ia64|riscv64) print -r -- "64" ;;
+        i386|arm|mips|s390|powerpc|riscv) print -r -- "32" ;;
+        *) print -r -- "unknown" ;;
       esac
       ;;
     family)
       case $ZRD_ARCH in
-        x86_64|i386) echo "x86" ;;
-        aarch64|arm) echo "arm" ;;
-        powerpc|powerpc64) echo "power" ;;
-        mips|mips64) echo "mips" ;;
-        s390|s390x) echo "s390" ;;
-        riscv|riscv64) echo "riscv" ;;
-        *) echo "$ZRD_ARCH" ;;
+        x86_64|i386) print -r -- "x86" ;;
+        aarch64|arm) print -r -- "arm" ;;
+        powerpc|powerpc64) print -r -- "power" ;;
+        mips|mips64) print -r -- "mips" ;;
+        s390|s390x) print -r -- "s390" ;;
+        riscv|riscv64) print -r -- "riscv" ;;
+        *) print -r -- "$ZRD_ARCH" ;;
       esac
       ;;
     endian)
       case $ZRD_ARCH in
-        x86_64|i386|aarch64|arm|mips|mips64|s390|s390x|powerpc64|riscv|riscv64) echo "little" ;;
-        powerpc|sparc) echo "big" ;;
-        *) echo "unknown" ;;
+        x86_64|i386|aarch64|arm|mips|mips64|s390|s390x|powerpc64|riscv|riscv64) print -r -- "little" ;;
+        powerpc|sparc) print -r -- "big" ;;
+        *) print -r -- "unknown" ;;
       esac
       ;;
     instruction-set|isa)
       case $ZRD_ARCH in
-        x86_64) echo "x86-64" ;;
-        i386) echo "x86" ;;
-        aarch64) echo "ARMv8-A" ;;
-        arm) echo "ARMv7" ;;
-        riscv64|riscv) echo "RV64I/RV32I" ;;
-        *) echo "$ZRD_ARCH" ;;
+        x86_64) print -r -- "x86-64" ;;
+        i386) print -r -- "x86" ;;
+        aarch64) print -r -- "ARMv8-A" ;;
+        arm) print -r -- "ARMv7" ;;
+        riscv64|riscv) print -r -- "RV64I/RV32I" ;;
+        *) print -r -- "$ZRD_ARCH" ;;
       esac
       ;;
     *)
@@ -1103,61 +1103,61 @@ zrd_arch() {
 }
 
 zrd_paths() {
-  emulate -L zsh
+  emulate -L zsh -o no_aliases
   zrd_available || return 1
   local kind=${1:-temp}
   case $kind in
     temp|tmp)
       if (( ZRD_IS_MACOS )); then
-        echo "${TMPDIR:-/tmp}"
+        print -r -- "${TMPDIR:-/tmp}"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
+        print -r -- "${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
       else
-        echo "${TMPDIR:-/tmp}"
+        print -r -- "${TMPDIR:-/tmp}"
       fi
       ;;
     config)
       if (( ZRD_IS_MACOS )); then
-        echo "${HOME}/Library/Preferences"
+        print -r -- "${HOME}/Library/Preferences"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${HOME}/.config"
+        print -r -- "${HOME}/.config"
       elif (( ZRD_IS_UNIX )); then
-        echo "${XDG_CONFIG_HOME:-$HOME/.config}"
+        print -r -- "${XDG_CONFIG_HOME:-$HOME/.config}"
       else
-        echo "$HOME"
+        print -r -- "$HOME"
       fi
       ;;
     cache)
       if (( ZRD_IS_MACOS )); then
-        echo "${HOME}/Library/Caches"
+        print -r -- "${HOME}/Library/Caches"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${HOME}/.cache"
+        print -r -- "${HOME}/.cache"
       elif (( ZRD_IS_UNIX )); then
-        echo "${XDG_CACHE_HOME:-$HOME/.cache}"
+        print -r -- "${XDG_CACHE_HOME:-$HOME/.cache}"
       else
-        echo "$HOME"
+        print -r -- "$HOME"
       fi
       ;;
     data)
       if (( ZRD_IS_MACOS )); then
-        echo "${HOME}/Library/Application Support"
+        print -r -- "${HOME}/Library/Application Support"
       elif (( ZRD_IS_TERMUX )); then
-        echo "${HOME}/.local/share"
+        print -r -- "${HOME}/.local/share"
       elif (( ZRD_IS_UNIX )); then
-        echo "${XDG_DATA_HOME:-$HOME/.local/share}"
+        print -r -- "${XDG_DATA_HOME:-$HOME/.local/share}"
       else
-        echo "$HOME"
+        print -r -- "$HOME"
       fi
       ;;
     runtime)
       if (( ZRD_IS_UNIX )); then
-        echo "${XDG_RUNTIME_DIR:-/tmp}"
+        print -r -- "${XDG_RUNTIME_DIR:-/tmp}"
       else
-        echo "/tmp"
+        print -r -- "/tmp"
       fi
       ;;
     home)
-      echo "$HOME"
+      print -r -- "$HOME"
       ;;
     *)
       __zrd_log 0 "Unknown path type: $kind"
