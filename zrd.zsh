@@ -194,7 +194,6 @@ __zrd_validate_config() {
   done
   return $changed
 }
-
 __zrd_validate_config
 
 #===============================================================================
@@ -313,12 +312,9 @@ __zrd_with_timeout() {
     "$timeout_cmd" "$seconds" "$@"
     return $?
   fi
-  # Fallback shim: background child, poll, kill on expiry
-  # Detach from stdin to prevent it from reading user input
-  "$@" </dev/null &
-  local -i pid=$!
-  local -F tick=0.25
-  local -F elapsed=0.0
+  # Fallback shim
+  "$@" </dev/null & local -i pid=$!
+  local -F tick=0.25 elapsed=0.0
   while kill -0 $pid 2>/dev/null; do
     sleep $tick
     elapsed=$(( elapsed + tick ))
@@ -349,14 +345,12 @@ __zrd_read_regular_file() {
     [[ $out == <-> ]] && size=$out || size=0
     (( size > 0 && size > max )) && { __zrd_log 1 "File too large: $file (${size} bytes)"; return 1; }
   fi
-
   if __zrd_find_cmd head >/dev/null 2>&1; then
     __zrd_exec_whitelisted head -c "$max" "$file" 2>/dev/null
   elif __zrd_find_cmd dd >/dev/null 2>&1; then
     __zrd_exec_whitelisted dd if="$file" bs=1 count="$max" 2>/dev/null
   else
-    local ch
-    local -i count=0 fd
+    local ch; local -i count=0 fd
     {
       exec {fd}<"$file" || return 1
       while IFS= read -r -k1 -u $fd ch && (( count < max )); do
@@ -444,16 +438,14 @@ __zrd_normalize_platform() {
 __zrd_normalize_arch() {
   emulate -L zsh
   local a=${1:l}
-  # Handle MACHTYPE format first (e.g., aarch64-apple-darwin24.4.0)
   if [[ $a == *-* ]]; then
-    a=${a%%-*}  # Extract architecture part before first dash
+    a=${a%%-*}
   fi
   case $a in
     x86_64|amd64|x64|x86_64h) print -r -- "x86_64" ;;
     i([3-6])86|i86pc|x86) print -r -- "i386" ;;
     arm64|aarch64|arm64v8|arm64e|arm64ec|arm64e*) print -r -- "aarch64" ;;
     armv8l|armv[4-8]*|armhf|armv7l) print -r -- "arm" ;;
-    # Handle generic arm last to avoid conflicts
     arm)
       if [[ ${1} == *aarch64* || ${1} == *arm64* ]]; then
         print -r -- "aarch64"
@@ -675,8 +667,7 @@ __zrd_detect_linux_distro() {
       __zrd_log 2 "Linux distro from lsb-release: $d $v ($c)"
     fi
   fi
-
-  # Legacy distro-specific files
+  # Legacy files
   if [[ $d == "unknown" ]]; then
     local -A files=(
       [rhel]="/etc/redhat-release"
@@ -701,11 +692,9 @@ __zrd_detect_linux_distro() {
       d=$k
       s=$(__zrd_read_regular_file "$f" 512 2>/dev/null)
       if [[ -n $s ]]; then
-        # Extract version from release file content
         if [[ $s =~ ([0-9]+(\.[0-9]+)*) ]]; then
           v=${match[1]}
         fi
-        # Try to extract codename from parentheses
         if [[ $s =~ '\(([^)]+)\)' ]]; then
           c=${match[1]}
         fi
@@ -714,21 +703,18 @@ __zrd_detect_linux_distro() {
       break
     done
   fi
-
-  # Distro name normalization
+  # Normalize distro name
   case ${d:l} in
     ubuntu|debian|mint|kali|elementary|pop|zorin|deepin|raspbian) d=${d:l} ;;
     rhel|centos|fedora|rocky|alma|almalinux|oracle|amazon|scientific) d=${d:l} ;;
     arch|manjaro|endeavour|artix|garuda|antergos|blackarch) d=${d:l} ;;
     opensuse*|suse*|sles*|leap*|tumbleweed*) d="opensuse" ;;
     nixos|gentoo|alpine|void|slackware|freebsd|openbsd|netbsd) d=${d:l} ;;
-    # Clean up common variations
     "red hat"*) d="rhel" ;;
     "alma linux"*) d="almalinux" ;;
     "rocky linux"*) d="rocky" ;;
     *) d=${d:l} ;;
   esac
-
   print -r -- "${d}:${v}:${c}"
 }
 
@@ -760,11 +746,9 @@ __zrd_collect_uname() {
 zrd_detect() {
   emulate -L zsh -o pipe_fail
   __zrd_cache_valid && return 0
-
   __zrd_log 2 "Detecting platform and environment"
   local start=$(__zrd_now)
 
-  # Gather system info (key=value stream)
   local -A sys
   local line k v
   while IFS= read -r line; do
@@ -785,31 +769,24 @@ zrd_detect() {
   [[ $arch == unknown ]] && arch=$(__zrd_normalize_arch "${sys[machine]}")
   [[ $arch == unknown ]] && arch=$(__zrd_normalize_arch "${sys[processor]}")
 
-  # Architecture detection with fallbacks (prioritize direct system calls)
   if [[ $arch == unknown ]]; then
-    # Try direct uname -m first
     local uname_m
     if uname_m=$(uname -m 2>/dev/null); then
       arch=$(__zrd_normalize_arch "$uname_m")
-      __zrd_log 2 "Architecture detected from direct uname: $uname_m -> $arch"
+      __zrd_log 2 "Architecture from direct uname: $uname_m -> $arch"
     fi
   fi
-
   if [[ $arch == unknown ]] && [[ -n ${HOSTTYPE:-} ]]; then
-    # HOSTTYPE is often the same as uname -m
     arch=$(__zrd_normalize_arch "${HOSTTYPE}")
-    __zrd_log 2 "Architecture detected from HOSTTYPE: ${HOSTTYPE} -> $arch"
+    __zrd_log 2 "Architecture from HOSTTYPE: ${HOSTTYPE} -> $arch"
   fi
-
   if [[ $arch == unknown ]] && [[ -n ${MACHTYPE:-} ]]; then
-    # Try MACHTYPE (may be abbreviated in some environments)
     arch=$(__zrd_normalize_arch "${MACHTYPE}")
-    __zrd_log 2 "Architecture detected from MACHTYPE: ${MACHTYPE} -> $arch"
+    __zrd_log 2 "Architecture from MACHTYPE: ${MACHTYPE} -> $arch"
   fi
-
   if [[ $arch == unknown ]] && [[ -n ${CPUTYPE:-} ]]; then
     arch=$(__zrd_normalize_arch "${CPUTYPE}")
-    __zrd_log 2 "Architecture detected from CPUTYPE: ${CPUTYPE} -> $arch"
+    __zrd_log 2 "Architecture from CPUTYPE: ${CPUTYPE} -> $arch"
   fi
 
   local -i is_wsl=0 is_container=0 is_vm=0 is_termux=0 is_chroot=0
@@ -877,6 +854,7 @@ zrd_detect() {
   typeset -gi ZRD_IS_VM=$is_vm
   typeset -gi ZRD_IS_TERMUX=$is_termux
   typeset -gi ZRD_IS_CHROOT=$is_chroot
+
   local -i is_interactive=0
   [[ ${options[interactive]:-} == on ]] && is_interactive=1
   typeset -gi ZRD_IS_INTERACTIVE=$is_interactive
@@ -1241,7 +1219,7 @@ zrd_cleanup() {
     ZRD_IS_WSL ZRD_IS_CONTAINER ZRD_IS_VM ZRD_IS_TERMUX ZRD_IS_CHROOT
     ZRD_IS_INTERACTIVE ZRD_IS_SSH ZRD_IS_ROOT ZRD_IS_CI
   )
-  local v
+  local fn v
   for v in "${vars[@]}"; do
     unset "$v" 2>/dev/null
   done
