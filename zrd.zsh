@@ -8,189 +8,48 @@
 # detailed system information with security-focused design and intelligent caching.
 #
 # Repository: https://github.com/khdaparastan/zsh-runtime-detect
-# Version:    2.2.3
+# Version:    2.3.0
 # API:        2
 # License:    MIT
 # Author:     khodaparastan <mohammad@khodapastan.com>
-# Created:    08/15/25
+# Created:    2025-08-15
 #
 #===============================================================================
-# FEATURES
-#===============================================================================
-#
-# Platform Detection:
-#   • Operating systems (macOS, Linux, BSD, Windows, etc.)
-#   • Architectures (x86_64, ARM/AArch64)
-#   • Kernel information and versions
-#
-# Environment Detection:
-#   • WSL (Windows Subsystem for Linux)
-#   • Containers (Docker, Podman, LXC, etc.)
-#   • Virtual machines (VMware, VirtualBox, QEMU, etc.)
-#   • Special environments (Termux, chroot, CI/CD)
-#
-# Distribution Detection:
-#   • Linux distributions (Ubuntu, CentOS, Arch, Debian, etc.)
-#   • macOS versions with codenames
-#   • Version and codename extraction
-#
-# Security Features:
-#   • Command whitelisting with approved paths only
-#   • File size limits and safe file reading
-#   • Command timeouts and input sanitization
-#   • Path validation and access restrictions
-#
-# Performance:
-#   • Intelligent caching with configurable TTL
-#   • Lazy loading - detection runs only when needed
-#   • Efficient fallbacks and graceful degradation
-#
-#===============================================================================
-# QUICK START
-#===============================================================================
-#
-# Basic usage:
-#   source zrd.zsh
-#   zrd_detect
-#   echo "Platform: $(zrd_summary)"
-#
-# Conditional logic:
-#   if zrd_is macos; then
-#       echo "Running on macOS"
-#   fi
-#
-# Get detailed info:
-#   zrd_info json | jq .
-#   zrd_arch bits        # "64" or "32"
-#   zrd_paths config     # Get config directory
-#
-#===============================================================================
-# CONFIGURATION
-#===============================================================================
-#
-# Set these variables before sourcing to customize behavior:
-#
-#   ZRD_CFG_AUTO_DETECT=0      # Auto-run detection on module load
-#   ZRD_CFG_DEBUG=0            # Debug level (0-3, higher = more verbose)
-#   ZRD_CFG_CACHE_TTL=300      # Cache timeout in seconds
-#   ZRD_CFG_MAX_FILE_SIZE=8192 # Maximum file size to read (bytes)
-#   ZRD_CFG_CMD_TIMEOUT=10     # Command execution timeout (seconds)
-#
-#===============================================================================
-# API REFERENCE
-#===============================================================================
-#
-# Core Functions:
-#   zrd_detect          - Run platform detection
-#   zrd_available       - Check if detection data is available
-#   zrd_refresh         - Force refresh detection data
-#   zrd_summary         - Get platform/arch summary (e.g., "linux/x86_64")
-#   zrd_cleanup         - Clean up module and unset variables
-#
-# Information Functions:
-#   zrd_info [type]     - Get detailed info (summary|full|json|distro|etc.)
-#   zrd_is [target]     - Test platform conditions (macos|linux|wsl|etc.)
-#   zrd_arch [query]    - Get architecture details (name|bits|family|etc.)
-#   zrd_paths [type]    - Get standard paths (temp|config|cache|data|etc.)
-#   zrd_status          - Show module status and configuration
-#
-# Available Variables (set after zrd_detect):
-#   ZRD_PLATFORM        - Normalized platform name (darwin, linux, etc.)
-#   ZRD_ARCH            - Normalized architecture (x86_64, aarch64, etc.)
-#   ZRD_KERNEL          - Kernel name (Darwin, Linux, etc.)
-#   ZRD_KERNEL_RELEASE  - Kernel release version
-#   ZRD_KERNEL_VERSION  - Full kernel version string
-#   ZRD_HOSTNAME        - System hostname
-#   ZRD_USERNAME        - Current username
-#   ZRD_DISTRO          - Distribution name (ubuntu, centos, macos, etc.)
-#   ZRD_DISTRO_VERSION  - Distribution version
-#   ZRD_DISTRO_CODENAME - Distribution codename
-#
-# Boolean Flags (1 = true, 0 = false):
-#   ZRD_IS_MACOS        - Running on macOS
-#   ZRD_IS_LINUX        - Running on Linux
-#   ZRD_IS_BSD          - Running on BSD variant
-#   ZRD_IS_UNIX         - Running on Unix-like system
-#   ZRD_IS_ARM          - ARM architecture (32 or 64-bit)
-#   ZRD_IS_X86_64       - x86_64 architecture
-#   ZRD_IS_WSL          - Windows Subsystem for Linux
-#   ZRD_IS_CONTAINER    - Running in container
-#   ZRD_IS_VM           - Running in virtual machine
-#   ZRD_IS_TERMUX       - Running in Termux (Android)
-#   ZRD_IS_CHROOT       - Running in chroot environment
-#   ZRD_IS_INTERACTIVE  - Interactive shell session
-#   ZRD_IS_SSH          - SSH session
-#   ZRD_IS_ROOT         - Running as root/administrator
-#   ZRD_IS_CI           - Running in CI/CD environment
-#
-#===============================================================================
-# EXAMPLES
-#===============================================================================
-#
-# Platform-specific configuration:
-#   if zrd_is macos; then
-#       alias ls='ls -G'
-#   elif zrd_is linux; then
-#       alias ls='ls --color=auto'
-#   fi
-#
-# Architecture-specific builds:
-#   if [[ $(zrd_arch family) == "arm" ]]; then
-#       export CFLAGS="-march=armv8-a"
-#   fi
-#
-# Environment-aware paths:
-#   config_dir=$(zrd_paths config)
-#   cache_dir=$(zrd_paths cache)
-#
-# JSON output for external tools:
-#   zrd_info json | jq -r '.platform + "/" + .architecture'
-#
-#===============================================================================
-# COMPATIBILITY
-#===============================================================================
-#
-# Requirements:
-#   • Zsh 5.0 or later
-#   • Basic Unix utilities (uname, hostname, etc.)
-#
-# Tested on:
-#   • macOS 10.15+ (Intel and Apple Silicon)
-#   • Linux distributions (Ubuntu, CentOS, Arch, Alpine, etc.)
-#   • BSD variants (FreeBSD, OpenBSD, NetBSD)
-#   • WSL 1 and WSL 2
-#   • Various container environments
-#
-#===============================================================================
-# LICENSE
-#===============================================================================
-#
-# MIT License - see LICENSE file for details
-# Copyright (c) 2025 Khodaparastan
-#
+# FEATURES (summary)
+# - Platform detection: OS, arch, kernel
+# - Environment detection: WSL, containers, VMs, Termux, chroot, CI, SSH
+# - Distribution detection: Linux (os-release/lsb_release/legacy), macOS (sw_vers/plist)
+# - Security: command whitelisting, strict mode, bounded file reads, timeouts, env sanitization
+# - Performance: caching with TTL, lazy evaluation, minimal subshells
 #===============================================================================
 
-# Module version and API information
-typeset -gr __ZRD_MODULE_VERSION="2.2.3"
+#------------------------------------------------------------------------------
+# Module version and API info
+#------------------------------------------------------------------------------
+typeset -gr __ZRD_MODULE_VERSION="2.3.0"
 typeset -gr __ZRD_API_VERSION="2"
 
-# Early reload/version guard
+#------------------------------------------------------------------------------
+# Early reload/version guard with robust cleanup
+#------------------------------------------------------------------------------
 if (( ${+__ZRD_MODULE_LOADED} )); then
-  if [[ ${__ZRD_MODULE_VERSION:-} != "2.2.3" ]]; then
+  if [[ ${__ZRD_MODULE_VERSION:-} != "2.3.0" ]]; then
+    emulate -L zsh
     print -P "%F{yellow}[platform] Version mismatch, reloading...%f" >&2
     if typeset -f zrd_cleanup >/dev/null 2>&1; then
       zrd_cleanup
     else
+      emulate -L zsh
       unset __ZRD_MODULE_LOADED __ZRD_CACHE_DETECTED __ZRD_CACHE_TIME \
             __ZRD_CACHE_SIGNATURE __ZRD_CACHE_VERSION 2>/dev/null
       unset ZRD_CFG_AUTO_DETECT ZRD_CFG_DEBUG ZRD_CFG_CACHE_TTL \
-            ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT 2>/dev/null
+            ZRD_CFG_MAX_FILE_SIZE ZRD_CFG_CMD_TIMEOUT ZRD_CFG_STRICT_CMDS \
+            ZRD_CFG_JSON_BOOL ZRD_CFG_SANITIZE_ENV 2>/dev/null
       unset ZRD_PLATFORM ZRD_ARCH ZRD_KERNEL ZRD_KERNEL_RELEASE ZRD_KERNEL_VERSION \
             ZRD_HOSTNAME ZRD_USERNAME ZRD_DISTRO ZRD_DISTRO_VERSION ZRD_DISTRO_CODENAME \
             ZRD_IS_MACOS ZRD_IS_LINUX ZRD_IS_BSD ZRD_IS_UNIX ZRD_IS_ARM ZRD_IS_X86_64 \
             ZRD_IS_WSL ZRD_IS_CONTAINER ZRD_IS_VM ZRD_IS_TERMUX ZRD_IS_CHROOT \
             ZRD_IS_INTERACTIVE ZRD_IS_SSH ZRD_IS_ROOT ZRD_IS_CI 2>/dev/null
-      # Best-effort cleanup of known function symbols if zrd_cleanup was unavailable
       unfunction zrd_detect zrd_available zrd_refresh zrd_summary zrd_info zrd_is \
                  zrd_arch zrd_paths zrd_status zrd_cleanup 2>/dev/null
       unfunction __zrd_log __zrd_now __zrd_json_escape __zrd_validate_config \
