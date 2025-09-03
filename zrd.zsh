@@ -1007,6 +1007,23 @@ zrd_info() {
       printf '  "distro_version": "%s",\n' "$(__zrd_json_escape "$ZRD_DISTRO_VERSION")"
       printf '  "distro_codename": "%s",\n' "$(__zrd_json_escape "$ZRD_DISTRO_CODENAME")"
       printf '  "flags": {\n'
+      if (( ZRD_CFG_JSON_BOOL )); then
+        printf '    "is_macos": %s,\n' "$(__zrd_bool $ZRD_IS_MACOS)"
+        printf '    "is_linux": %s,\n' "$(__zrd_bool $ZRD_IS_LINUX)"
+        printf '    "is_bsd": %s,\n' "$(__zrd_bool $ZRD_IS_BSD)"
+        printf '    "is_unix": %s,\n' "$(__zrd_bool $ZRD_IS_UNIX)"
+        printf '    "is_arm": %s,\n' "$(__zrd_bool $ZRD_IS_ARM)"
+        printf '    "is_x86_64": %s,\n' "$(__zrd_bool $ZRD_IS_X86_64)"
+        printf '    "is_wsl": %s,\n' "$(__zrd_bool $ZRD_IS_WSL)"
+        printf '    "is_container": %s,\n' "$(__zrd_bool $ZRD_IS_CONTAINER)"
+        printf '    "is_vm": %s,\n' "$(__zrd_bool $ZRD_IS_VM)"
+        printf '    "is_termux": %s,\n' "$(__zrd_bool $ZRD_IS_TERMUX)"
+        printf '    "is_chroot": %s,\n' "$(__zrd_bool $ZRD_IS_CHROOT)"
+        printf '    "is_interactive": %s,\n' "$(__zrd_bool $ZRD_IS_INTERACTIVE)"
+        printf '    "is_ssh": %s,\n' "$(__zrd_bool $ZRD_IS_SSH)"
+        printf '    "is_root": %s,\n' "$(__zrd_bool $ZRD_IS_ROOT)"
+        printf '    "is_ci": %s\n' "$(__zrd_bool $ZRD_IS_CI)"
+      else
       printf '    "is_macos": %d,\n' $ZRD_IS_MACOS
       printf '    "is_linux": %d,\n' $ZRD_IS_LINUX
       printf '    "is_bsd": %d,\n' $ZRD_IS_BSD
@@ -1022,6 +1039,7 @@ zrd_info() {
       printf '    "is_ssh": %d,\n' $ZRD_IS_SSH
       printf '    "is_root": %d,\n' $ZRD_IS_ROOT
       printf '    "is_ci": %d\n' $ZRD_IS_CI
+      fi
       printf '  },\n'
       printf '  "metadata": {\n'
       printf '    "version": "%s",\n' "$(__zrd_json_escape "$__ZRD_MODULE_VERSION")"
@@ -1191,6 +1209,7 @@ zrd_status() {
   print -P "  %F{yellow}Version:%f $__ZRD_MODULE_VERSION (API: $__ZRD_API_VERSION)"
   print -P "  %F{yellow}Loaded:%f ${__ZRD_MODULE_LOADED:+Yes}"
   print -P "  %F{yellow}Detected:%f ${__ZRD_CACHE_DETECTED:+Yes}"
+  print -P "  %F{yellow}Mode:%f strict_cmds=$ZRD_CFG_STRICT_CMDS sanitize_env=$ZRD_CFG_SANITIZE_ENV json_bool=$ZRD_CFG_JSON_BOOL"
   if zrd_available; then
     print -P "  %F{yellow}Platform:%f $(zrd_summary)"
     print -P "  %F{yellow}Cache TTL:%f ${ZRD_CFG_CACHE_TTL}s"
