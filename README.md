@@ -272,10 +272,10 @@ zsh-runtime-detect follows a layered architecture designed for reliability, perf
 
 ```bash
 # Download to your project
-curl -fsSL https://raw.githubusercontent.com/khodaparastan/zsh-runtime-detect/main/zrd.zsh -o zrd.zsh
+curl -fsSL https://get.mkh.sh/zrd -o zrd.zsh
 
 # Or install system-wide
-sudo curl -fsSL https://raw.githubusercontent.com/khodaparastan/zsh-runtime-detect/main/zrd.zsh -o /usr/local/lib/zrd.zsh
+sudo curl -fsSL https://get.mkh.sh/zrd -o /usr/local/lib/zrd.zsh
 ```
 
 ### Method 2: Git Clone
